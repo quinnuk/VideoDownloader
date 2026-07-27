@@ -1,3 +1,4 @@
+
 """A simple queue-based desktop front end for yt-dlp."""
 
 import os
@@ -127,9 +128,9 @@ class VideoDownloaderApp(ctk.CTk):
             ("audio_only", "Audio Only (MP3)"),
         ]:
             ctk.CTkRadioButton(left, text=label, variable=self.quality_var, value=value).pack(anchor="w", pady=1)
-        self.include_audio_var = ctk.BooleanVar(value=self.cfg.get("include_audio", True))
+        self.mute_var = ctk.BooleanVar(value=not self.cfg.get("include_audio", True))
         self.include_audio_checkbox = ctk.CTkCheckBox(
-            left, text="Include sound in video downloads", variable=self.include_audio_var
+            left, text="No sound (mute video)", variable=self.mute_var
         )
         self.include_audio_checkbox.pack(anchor="w", pady=(5, 0))
         self.quality_var.trace_add("write", self._update_audio_option)
@@ -192,7 +193,11 @@ class VideoDownloaderApp(ctk.CTk):
             self.folder_entry.insert(0, folder)
 
     def _paste_url(self):
-        self.url_entry.event_generate("<<Paste>>")
+        try:
+            clipboard_text = self.clipboard_get()
+            self.url_entry.insert("insert", clipboard_text)
+        except tk.TclError:
+            pass
 
     def _clear_url(self):
         self.url_entry.delete(0, "end")
@@ -275,7 +280,7 @@ class VideoDownloaderApp(ctk.CTk):
         title = self.preview_info.get("title", "Video link") if self.preview_url == url and self.preview_info else "Video link"
         self.queue.append(QueueItem(
             url=url, output_folder=output_folder, quality=self.quality_var.get(),
-            include_audio=self.include_audio_var.get(), keep_original=self.keep_original_var.get(),
+            include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
             duplicate_mode=self.duplicate_var.get(), title=title,
         ))
         self._save_settings(output_folder)
@@ -286,7 +291,7 @@ class VideoDownloaderApp(ctk.CTk):
     def _save_settings(self, output_folder: str):
         self.cfg.update({
             "output_folder": output_folder, "quality": self.quality_var.get(),
-            "include_audio": self.include_audio_var.get(), "keep_original": self.keep_original_var.get(),
+            "include_audio": not self.mute_var.get(), "keep_original": self.keep_original_var.get(),
             "duplicate_mode": self.duplicate_var.get(), "open_folder_when_finished": self.open_folder_var.get(),
             "remove_completed": self.remove_completed_var.get(), "last_url": self.url_entry.get().strip(),
         })
