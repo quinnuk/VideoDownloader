@@ -4,9 +4,9 @@ A modern Windows video downloader with a simple, user-friendly interface powered
 
 Download videos and audio from your favourite websites with support for thousands of online platforms.
 
-![Windows](https://img.shields.io/badge/platform-Windows-blue)
-![Python](https://img.shields.io/badge/python-3.x-yellow)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
+
+<a href="https://buymeacoffee.com/quinnuk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2.svg" alt="Buy Me A Coffee" height="41" width="174"></a>
 
 ---
 
@@ -60,9 +60,7 @@ Screenshots coming soon.
 
 ### Option 1 — Installer (Recommended)
 
-Download the latest release:
-
-➡️ **Video Downloader Pro Setup**
+[![Download Latest Version](https://img.shields.io/badge/Download-Latest%20Version-blue?style=for-the-badge&logo=windows)](https://github.com/quinnuk/VideoDownloader/releases/latest/download/VideoDownloader-Setup.exe)
 
 Run the installer and follow the instructions.
 
@@ -75,5 +73,6 @@ Requirements:
 
 Install dependencies:
 
-```bash
+```
 pip install -r requirements.txt
+```
