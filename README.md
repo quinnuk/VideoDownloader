@@ -8,7 +8,7 @@ Download videos and audio from your favourite websites with support for thousand
 
 <p align="center">
   <a href="https://buymeacoffee.com/quinnuk" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2.svg" alt="Buy Me A Coffee" height="60" width="217">
+    <img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=☕&slug=quinnuk&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" height="60" width="217">
   </a>
   <br>
   <sub>If Video Downloader Pro saves you time, a coffee is always appreciated ☕</sub>
@@ -91,6 +91,6 @@ Video Downloader Pro is free and built in my spare time. If it's useful to you, 
 
 <p align="center">
   <a href="https://buymeacoffee.com/quinnuk" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2.svg" alt="Buy Me A Coffee" height="50" width="180">
+    <img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=☕&slug=quinnuk&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" height="50" width="180">
   </a>
 </p>
