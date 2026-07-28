@@ -6,7 +6,13 @@ Download videos and audio from your favourite websites with support for thousand
 
 [![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
 
-<a href="https://buymeacoffee.com/quinnuk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2.svg" alt="Buy Me A Coffee" height="41" width="174"></a>
+<p align="center">
+  <a href="https://buymeacoffee.com/quinnuk" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2.svg" alt="Buy Me A Coffee" height="60" width="217">
+  </a>
+  <br>
+  <sub>If Video Downloader Pro saves you time, a coffee is always appreciated ☕</sub>
+</p>
 
 ---
 
@@ -76,3 +82,15 @@ Install dependencies:
 ```
 pip install -r requirements.txt
 ```
+
+---
+
+## ☕ Support This Project
+
+Video Downloader Pro is free and built in my spare time. If it's useful to you, consider buying me a coffee — it's a big help and genuinely appreciated.
+
+<p align="center">
+  <a href="https://buymeacoffee.com/quinnuk" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2.svg" alt="Buy Me A Coffee" height="50" width="180">
+  </a>
+</p>
