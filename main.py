@@ -1,4 +1,3 @@
-
 """A simple queue-based desktop front end for yt-dlp."""
 
 import os
@@ -122,12 +121,22 @@ class VideoDownloaderApp(ctk.CTk):
 
         ctk.CTkLabel(left, text="Download Quality", anchor="w").pack(fill="x")
         self.quality_var = ctk.StringVar(value=self.cfg.get("quality", "best"))
-        for value, label in [
-            ("best", "Best Available"),
-            ("1080p", "Up to 1080p"),
-            ("audio_only", "Audio Only (MP3)"),
-        ]:
-            ctk.CTkRadioButton(left, text=label, variable=self.quality_var, value=value).pack(anchor="w", pady=1)
+        self.quality_labels = {
+            "best": "Best Available",
+            "1080p": "Up to 1080p",
+            "audio_only": "Audio Only (MP3)",
+        }
+        quality_values_by_label = {label: value for value, label in self.quality_labels.items()}
+        self.quality_display_var = ctk.StringVar(
+            value=self.quality_labels.get(self.quality_var.get(), "Best Available")
+        )
+        quality_segmented = ctk.CTkSegmentedButton(
+            left,
+            values=list(self.quality_labels.values()),
+            variable=self.quality_display_var,
+            command=lambda label: self.quality_var.set(quality_values_by_label[label]),
+        )
+        quality_segmented.pack(fill="x", pady=(2, 6))
         self.mute_var = ctk.BooleanVar(value=not self.cfg.get("include_audio", True))
         self.include_audio_checkbox = ctk.CTkCheckBox(
             left, text="No sound (mute video)", variable=self.mute_var
