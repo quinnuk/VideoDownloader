@@ -18,6 +18,14 @@ FORMAT_SELECTORS = {
     "audio_only": "bestaudio/best",
 }
 
+# Used instead of FORMAT_SELECTORS when the user wants the video muted, so the
+# chosen quality cap (e.g. "Up to 1080p") still applies even though there's no
+# audio track to select alongside it.
+VIDEO_ONLY_SELECTORS = {
+    "best": "bestvideo[ext=mp4]/bestvideo",
+    "1080p": "bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]/bestvideo[ext=mp4]/bestvideo",
+}
+
 # Templates used to reconstruct a full URL when flat playlist extraction only
 # gives us a bare video ID for a site we recognise. Extend as needed.
 KNOWN_ENTRY_URL_TEMPLATES = {
@@ -138,7 +146,7 @@ def download_video(
     is_audio = quality == "audio_only"
     video_only = not is_audio and not include_audio
     format_selector = (
-        "bestvideo[ext=mp4]/bestvideo" if video_only
+        VIDEO_ONLY_SELECTORS.get(quality, VIDEO_ONLY_SELECTORS["best"]) if video_only
         else FORMAT_SELECTORS.get(quality, FORMAT_SELECTORS["best"])
     )
 
