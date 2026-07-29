@@ -23,6 +23,7 @@ Download videos and audio from your favourite websites with support for thousand
 - Download videos from YouTube, Vimeo, TikTok, Reddit, Facebook, X/Twitter and many more
 - Powered by the reliable **yt-dlp** engine
 - Supports thousands of websites
+- Paste a playlist link to add every video in it to the queue at once
 
 ### 👀 Video Preview
 
@@ -98,7 +99,7 @@ Or on Windows, just double-click `run.bat`.
 ## ▶️ Usage
 
 1. Paste a video link into the **Video URL** box (or copy one — it's detected automatically).
-2. Click **Preview** to check the title, uploader, duration, and thumbnail before downloading.
+2. Click **Preview** to check the title, uploader, duration, and thumbnail before downloading. Pasting a playlist link shows the video count instead, and lets you add the whole playlist or just that one link.
 3. Choose your **Download Quality** (Best Available, Up to 1080p, or Audio Only/MP3) and output folder.
 4. Click **Add to Queue** — repeat for as many links as you like.
 5. Click **Start Queue** to begin downloading. Progress, speed, and ETA are shown live.

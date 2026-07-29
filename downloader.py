@@ -34,10 +34,46 @@ def is_valid_url(url: str) -> bool:
 
 
 def get_video_info(url: str) -> dict:
-    """Return lightweight information for the preview panel without downloading."""
-    with yt_dlp.YoutubeDL({"noplaylist": True, "quiet": True, "no_warnings": True}) as ydl:
+    """Return lightweight information for the preview panel without downloading.
+
+    If the URL points at a playlist, returns {"is_playlist": True, "playlist_title": ...,
+    "entries": [{"url": ..., "title": ...}, ...]} using yt-dlp's flat extraction, which is
+    fast even for large playlists since it doesn't fetch full metadata per video.
+    Otherwise returns the usual single-video info shape with "is_playlist": False.
+    """
+    probe_options = {
+        "noplaylist": False,
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+    }
+    with yt_dlp.YoutubeDL(probe_options) as ydl:
         info = ydl.extract_info(url, download=False)
+
+    if info.get("_type") == "playlist" or "entries" in info:
+        entries = []
+        for entry in info.get("entries") or []:
+            if not entry:
+                continue
+            entry_url = entry.get("url") or entry.get("webpage_url")
+            if not entry_url:
+                continue
+            if not is_valid_url(entry_url):
+                # Flat extraction sometimes returns a bare video ID rather than a full
+                # URL for some sites; skip anything we can't turn into a real link.
+                continue
+            entries.append({
+                "url": entry_url,
+                "title": entry.get("title") or entry.get("id") or "Video",
+            })
+        return {
+            "is_playlist": True,
+            "playlist_title": info.get("title") or "Playlist",
+            "entries": entries,
+        }
+
     return {
+        "is_playlist": False,
         "title": info.get("title", "Video"),
         "uploader": info.get("uploader") or info.get("channel"),
         "duration": info.get("duration"),

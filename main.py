@@ -65,6 +65,7 @@ class VideoDownloaderApp(ctk.CTk):
         self.preview_url = ""
         self.preview_info: dict | None = None
         self.preview_image = None
+        self.last_clipboard = ""
 
         self._build_ui()
         self._check_clipboard_for_url()
@@ -166,7 +167,7 @@ class VideoDownloaderApp(ctk.CTk):
         self.add_btn.pack(side="left", fill="x", expand=True)
         self.start_btn = ctk.CTkButton(actions, text="Start Queue", command=self._start_queue)
         self.start_btn.pack(side="left", fill="x", expand=True, padx=8)
-        self.cancel_btn = ctk.CTkButton(actions, text="Cancel Current", fg_color="#9b3030", command=self._cancel_current)
+        self.cancel_btn = ctk.CTkButton(actions, text="Pause Current", fg_color="#9b6b30", command=self._cancel_current)
         self.cancel_btn.pack(side="left", fill="x", expand=True)
 
         ctk.CTkLabel(self, text="Download Queue", anchor="w").pack(fill="x", padx=pad_x)
@@ -233,9 +234,18 @@ class VideoDownloaderApp(ctk.CTk):
         try:
             clip = pyperclip.paste().strip()
         except Exception:
-            return
-        if clip and downloader.is_valid_url(clip) and not self.url_entry.get():
-            self.url_entry.insert(0, clip)
+            clip = None
+        if clip and clip != self.last_clipboard and downloader.is_valid_url(clip):
+            current = self.url_entry.get().strip()
+            # Only auto-fill if the box is empty or still holds the last clip we
+            # auto-filled, so we never overwrite something the user typed themselves.
+            if not current or current == self.last_clipboard:
+                self.url_entry.delete(0, "end")
+                self.url_entry.insert(0, clip)
+        if clip is not None:
+            self.last_clipboard = clip
+        # Keep checking every 1.5s so links copied after launch are picked up too.
+        self.after(1500, self._check_clipboard_for_url)
 
     def _preview_clicked(self):
         url = self.url_entry.get().strip()
@@ -255,6 +265,14 @@ class VideoDownloaderApp(ctk.CTk):
     def _show_preview(self, url: str, info: dict):
         self.preview_url = url
         self.preview_info = info
+        if info.get("is_playlist"):
+            count = len(info.get("entries") or [])
+            self.thumbnail_label.configure(image=None, text="")
+            self.preview_image = None
+            self.preview_label.configure(
+                text=f"Playlist: {info.get('playlist_title', 'Playlist')}\n{count} videos found"
+            )
+            return
         duration = info.get("duration")
         minutes = f" • {duration // 60}:{duration % 60:02d}" if isinstance(duration, int) else ""
         uploader = f"\n{info.get('uploader')}" if info.get("uploader") else ""
@@ -286,7 +304,41 @@ class VideoDownloaderApp(ctk.CTk):
         except OSError:
             messagebox.showerror("Folder Error", "The output folder path is not valid.")
             return
-        title = self.preview_info.get("title", "Video link") if self.preview_url == url and self.preview_info else "Video link"
+
+        previewed = self.preview_url == url and self.preview_info
+
+        if previewed and self.preview_info.get("is_playlist"):
+            entries = self.preview_info.get("entries") or []
+            if not entries:
+                messagebox.showwarning(
+                    "Empty Playlist", "No downloadable videos were found in this playlist."
+                )
+                return
+            playlist_title = self.preview_info.get("playlist_title", "this playlist")
+            add_all = messagebox.askyesno(
+                "Playlist Detected",
+                f"\"{playlist_title}\" has {len(entries)} videos.\n\n"
+                "Add all of them to the queue? Each video downloads and can be "
+                "paused/resumed separately.\n\n"
+                "Choose No to add only the single link you pasted instead.",
+            )
+            if add_all:
+                for entry in entries:
+                    self.queue.append(QueueItem(
+                        url=entry["url"], output_folder=output_folder, quality=self.quality_var.get(),
+                        include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
+                        duplicate_mode=self.duplicate_var.get(), title=entry.get("title", "Video link"),
+                    ))
+                self._save_settings(output_folder)
+                self._refresh_queue()
+                self.status_label.configure(
+                    text=f"Added {len(entries)} videos from the playlist to the queue."
+                )
+                self._clear_url()
+                return
+            # Falls through to add just the pasted URL as a single item below.
+
+        title = self.preview_info.get("title", "Video link") if previewed and not self.preview_info.get("is_playlist") else "Video link"
         self.queue.append(QueueItem(
             url=url, output_folder=output_folder, quality=self.quality_var.get(),
             include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
@@ -295,6 +347,7 @@ class VideoDownloaderApp(ctk.CTk):
         self._save_settings(output_folder)
         self._refresh_queue()
         self.status_label.configure(text="Added to queue. You can add another link or start downloading.")
+        self._clear_url()
         self._clear_url()
 
     def _save_settings(self, output_folder: str):
@@ -315,8 +368,8 @@ class VideoDownloaderApp(ctk.CTk):
     def _start_queue(self):
         if self.queue_thread and self.queue_thread.is_alive():
             return
-        if not any(item.status == "Waiting" for item in self.queue):
-            self.status_label.configure(text="There are no waiting downloads in the queue.")
+        if not any(item.status in ("Waiting", "Paused") for item in self.queue):
+            self.status_label.configure(text="There are no waiting or paused downloads in the queue.")
             return
         missing = missing_tools_message()
         if missing:
@@ -329,13 +382,13 @@ class VideoDownloaderApp(ctk.CTk):
     def _cancel_current(self):
         if self.queue_thread and self.queue_thread.is_alive():
             self.cancel_event.set()
-            self.status_label.configure(text="Cancelling after the current download check...")
+            self.status_label.configure(text="Pausing after the current download check...")
 
     def _run_queue(self):
         for item in self.queue:
             if self.cancel_event.is_set():
                 break
-            if item.status != "Waiting":
+            if item.status not in ("Waiting", "Paused"):
                 continue
             self.after(0, self._set_item_downloading, item)
             try:
@@ -350,7 +403,7 @@ class VideoDownloaderApp(ctk.CTk):
                 item.filepath = result.filepath
                 item.status = "Done"
             except downloader.DownloadCancelled:
-                item.status = "Cancelled"
+                item.status = "Paused"
                 self.cancel_event.set()
             except Exception as exc:  # noqa: BLE001
                 item.status = "Failed"
@@ -400,7 +453,9 @@ class VideoDownloaderApp(ctk.CTk):
 
     def _queue_finished(self):
         if self.cancel_event.is_set():
-            self.status_label.configure(text="Queue stopped. Remaining items are still waiting.")
+            self.status_label.configure(
+                text="Queue paused. Click Start Queue to resume the paused download and continue."
+            )
         else:
             self.status_label.configure(text="Queue finished.")
             if self.open_folder_var.get() and self.queue:
@@ -421,13 +476,13 @@ class VideoDownloaderApp(ctk.CTk):
         if item is None:
             return
         if item.status == "Downloading":
-            messagebox.showinfo("Queue", "Cancel the current download before removing it.")
+            messagebox.showinfo("Queue", "Pause the current download before removing it.")
             return
         self.queue.remove(item)
         self._refresh_queue()
 
     def _clear_completed(self):
-        self.queue = [item for item in self.queue if item.status not in {"Done", "Failed", "Cancelled"}]
+        self.queue = [item for item in self.queue if item.status not in {"Done", "Failed"}]
         self._refresh_queue()
 
     def _open_selected_file(self):
