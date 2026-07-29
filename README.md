@@ -4,7 +4,13 @@ A modern Windows video downloader with a simple, user-friendly interface powered
 
 Download videos and audio from your favourite websites with support for thousands of online platforms.
 
-[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/quinnuk/VideoDownloader/releases/latest) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://www.python.org/) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+<p align="center">
+  <a href="https://github.com/quinnuk/VideoDownloader/releases/latest/download/VideoDownloader-Setup.exe">
+    <img src="https://img.shields.io/badge/⬇%20Download%20for%20Windows-VideoDownloader--Setup.exe-blue?style=for-the-badge&logo=windows" alt="Download Video Downloader Pro for Windows">
+  </a>
+</p>
 
 <p align="center">
   <a href="https://buymeacoffee.com/quinnuk" target="_blank">
