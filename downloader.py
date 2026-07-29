@@ -18,9 +18,25 @@ FORMAT_SELECTORS = {
     "audio_only": "bestaudio/best",
 }
 
+# Templates used to reconstruct a full URL when flat playlist extraction only
+# gives us a bare video ID for a site we recognise. Extend as needed.
+KNOWN_ENTRY_URL_TEMPLATES = {
+    "Youtube": "https://www.youtube.com/watch?v={id}",
+    "YoutubeTab": "https://www.youtube.com/watch?v={id}",
+    "Vimeo": "https://vimeo.com/{id}",
+}
+
 
 class DownloadCancelled(Exception):
-    """Raised by the progress hook when the user cancels a queued download."""
+    """Raised when the user cancels a queued download."""
+
+
+class DownloadSkipped(Exception):
+    """Raised when the user chooses to skip a download because the file already exists.
+
+    Kept separate from other failures so callers can show "Skipped" rather than
+    "Failed" for a deliberate user choice.
+    """
 
 
 class DownloadResult:
@@ -33,12 +49,35 @@ def is_valid_url(url: str) -> bool:
     return bool(url) and bool(URL_RE.match(url.strip()))
 
 
+def _resolve_entry_url(entry: dict) -> Optional[str]:
+    """Return a usable URL for a flat-extracted playlist entry, or None.
+
+    Flat extraction sometimes returns a bare video ID rather than a full URL
+    for some sites. When that happens, try to reconstruct a real URL from the
+    ID for extractors we recognise instead of silently dropping the entry.
+    """
+    entry_url = entry.get("url") or entry.get("webpage_url")
+    if entry_url and is_valid_url(entry_url):
+        return entry_url
+
+    ie_key = entry.get("ie_key") or entry.get("extractor_key") or entry.get("extractor")
+    entry_id = entry.get("id")
+    if ie_key and entry_id:
+        template = KNOWN_ENTRY_URL_TEMPLATES.get(ie_key)
+        if template:
+            return template.format(id=entry_id)
+
+    return None
+
+
 def get_video_info(url: str) -> dict:
     """Return lightweight information for the preview panel without downloading.
 
     If the URL points at a playlist, returns {"is_playlist": True, "playlist_title": ...,
-    "entries": [{"url": ..., "title": ...}, ...]} using yt-dlp's flat extraction, which is
-    fast even for large playlists since it doesn't fetch full metadata per video.
+    "entries": [{"url": ..., "title": ...}, ...], "unresolved_count": N} using yt-dlp's
+    flat extraction, which is fast even for large playlists since it doesn't fetch full
+    metadata per video. "unresolved_count" reports how many entries could not be turned
+    into a usable URL, so callers can surface that instead of silently losing videos.
     Otherwise returns the usual single-video info shape with "is_playlist": False.
     """
     probe_options = {
@@ -52,24 +91,23 @@ def get_video_info(url: str) -> dict:
 
     if info.get("_type") == "playlist" or "entries" in info:
         entries = []
+        unresolved_count = 0
         for entry in info.get("entries") or []:
             if not entry:
                 continue
-            entry_url = entry.get("url") or entry.get("webpage_url")
-            if not entry_url:
-                continue
-            if not is_valid_url(entry_url):
-                # Flat extraction sometimes returns a bare video ID rather than a full
-                # URL for some sites; skip anything we can't turn into a real link.
+            resolved_url = _resolve_entry_url(entry)
+            if not resolved_url:
+                unresolved_count += 1
                 continue
             entries.append({
-                "url": entry_url,
+                "url": resolved_url,
                 "title": entry.get("title") or entry.get("id") or "Video",
             })
         return {
             "is_playlist": True,
             "playlist_title": info.get("title") or "Playlist",
             "entries": entries,
+            "unresolved_count": unresolved_count,
         }
 
     return {
@@ -93,6 +131,9 @@ def download_video(
     duplicate_callback: Optional[Callable[[str], str]] = None,
 ) -> DownloadResult:
     """Download one item, optionally without sound, and report its progress."""
+    if cancel_event is not None and cancel_event.is_set():
+        raise DownloadCancelled()
+
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     is_audio = quality == "audio_only"
     video_only = not is_audio and not include_audio
@@ -115,23 +156,34 @@ def download_video(
             progress_callback({
                 "status": "downloading", "percent": percent,
                 "speed": f"{speed / 1024 / 1024:.1f} MB/s" if speed else "-",
-                "eta": f"{eta // 60:02d}:{eta % 60:02d}" if eta else "-",
+                "eta": f"{eta // 60:02d}:{eta % 60:02d}" if eta is not None else "-",
             })
         elif data["status"] == "finished":
             progress_callback({"status": "finished", "percent": 100.0})
 
     output_template = str(Path(output_dir) / "%(title)s.%(ext)s")
     if duplicate_mode == "Ask me":
-        probe_options = {"outtmpl": output_template, "noplaylist": True, "quiet": True, "no_warnings": True}
+        # Use the same format selector we're about to download with, so the
+        # probed filename's extension matches what the real download will
+        # produce (e.g. mp4 forced for "1080p" vs. a site's native container).
+        probe_options = {
+            "format": format_selector,
+            "outtmpl": output_template,
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+        }
         with yt_dlp.YoutubeDL(probe_options) as probe:
             probe_info = probe.extract_info(url, download=False)
             existing_path = Path(probe.prepare_filename(probe_info))
         if is_audio:
             existing_path = existing_path.with_suffix(".mp3")
+        if cancel_event is not None and cancel_event.is_set():
+            raise DownloadCancelled()
         if existing_path.exists():
             action = duplicate_callback(str(existing_path)) if duplicate_callback else "skip"
             if action == "skip":
-                raise FileExistsError(f"Skipped because this file already exists: {existing_path.name}")
+                raise DownloadSkipped(f"Skipped because this file already exists: {existing_path.name}")
             duplicate_mode = "Overwrite" if action == "overwrite" else "Rename automatically"
 
     ydl_opts = {
@@ -157,9 +209,19 @@ def download_video(
     elif not video_only:
         ydl_opts["merge_output_format"] = "mp4"
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filepath = ydl.prepare_filename(info)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filepath = ydl.prepare_filename(info)
+    except DownloadCancelled:
+        raise
+    except yt_dlp.utils.DownloadError as exc:
+        # yt-dlp may wrap the hook's raised DownloadCancelled in its own
+        # DownloadError rather than letting it propagate unchanged. Treat
+        # that the same as a clean cancellation instead of a real failure.
+        if cancel_event is not None and cancel_event.is_set():
+            raise DownloadCancelled() from exc
+        raise
 
     if is_audio:
         final_path = str(Path(filepath).with_suffix(".mp3"))
