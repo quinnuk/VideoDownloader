@@ -4,7 +4,7 @@ A modern Windows video downloader with a simple, user-friendly interface powered
 
 Download videos and audio from your favourite websites with support for thousands of online platforms.
 
-[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
   <a href="https://buymeacoffee.com/quinnuk" target="_blank">
@@ -58,7 +58,7 @@ Before downloading, preview:
 
 ## 🖥 Screenshots
 
-Screenshots coming soon.
+![Main window](screenshots/main-window.png)
 
 ---
 
@@ -69,6 +69,8 @@ Screenshots coming soon.
 [![Download Latest Version](https://img.shields.io/badge/Download-Latest%20Version-blue?style=for-the-badge&logo=windows)](https://github.com/quinnuk/VideoDownloader/releases/latest/download/VideoDownloader-Setup.exe)
 
 Run the installer and follow the instructions.
+
+> **Note:** Since this app isn't code-signed, Windows SmartScreen may show a "Windows protected your PC" warning the first time you run the installer. This is normal for small independent apps — click **More info**, then **Run anyway** to continue.
 
 ### Option 2 — Run from Source
 
@@ -82,6 +84,25 @@ Install dependencies:
 ```
 pip install -r requirements.txt
 ```
+
+Then launch the app:
+
+```
+python main.py
+```
+
+Or on Windows, just double-click `run.bat`.
+
+---
+
+## ▶️ Usage
+
+1. Paste a video link into the **Video URL** box (or copy one — it's detected automatically).
+2. Click **Preview** to check the title, uploader, duration, and thumbnail before downloading.
+3. Choose your **Download Quality** (Best Available, Up to 1080p, or Audio Only/MP3) and output folder.
+4. Click **Add to Queue** — repeat for as many links as you like.
+5. Click **Start Queue** to begin downloading. Progress, speed, and ETA are shown live.
+6. Once finished, use **Open Selected File** or **Open Selected Folder** to jump straight to your download.
 
 ---
 

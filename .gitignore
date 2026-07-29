@@ -5,6 +5,7 @@ __pycache__/
 # Build files
 build/
 dist/
+*.spec
 
 # Installer output
 output/
