@@ -34,7 +34,15 @@ except ImportError:
     HAS_CLIPBOARD = False
 
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme("green")
+
+# Custom palette: lifted charcoal background (instead of near-black) with a teal
+# accent, kept distinct from the amber "Pause" and red "danger" status colors used
+# elsewhere so the queue's status colors stay easy to tell apart from actions.
+COLOR_BG = "#1c1c1e"
+COLOR_PANEL = "#26262a"
+COLOR_ACCENT = "#0f6e56"
+COLOR_ACCENT_HOVER = "#0c5744"
 
 
 @dataclass
@@ -54,6 +62,7 @@ class QueueItem:
 class VideoDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.configure(fg_color=COLOR_BG)
         self.title("Video Downloader")
         self.geometry("700x780")
         self.minsize(640, 680)
@@ -87,15 +96,14 @@ class VideoDownloaderApp(ctk.CTk):
         ctk.CTkLabel(self, text="Video URL", anchor="w").pack(fill="x", padx=pad_x)
         url_row = ctk.CTkFrame(self, fg_color="transparent")
         url_row.pack(fill="x", padx=pad_x, pady=(2, 0))
-        self.url_entry = ctk.CTkEntry(url_row, placeholder_text="https://...")
+        self.url_entry = ctk.CTkEntry(url_row, placeholder_text="https://...", fg_color=COLOR_PANEL)
         self.url_entry.pack(side="left", fill="x", expand=True)
-        self.url_entry.insert(0, self.cfg.get("last_url", ""))
         self.url_entry.bind("<Button-3>", self._show_url_context_menu)
-        ctk.CTkButton(url_row, text="Paste", width=62, command=self._paste_url).pack(side="left", padx=(8, 0))
-        ctk.CTkButton(url_row, text="Clear", width=62, command=self._clear_url).pack(side="left", padx=(6, 0))
-        ctk.CTkButton(url_row, text="Preview", width=70, command=self._preview_clicked).pack(side="left", padx=(6, 0))
+        ctk.CTkButton(url_row, text="Paste", width=62, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._paste_url).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(url_row, text="Clear", width=62, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._clear_url).pack(side="left", padx=(6, 0))
+        ctk.CTkButton(url_row, text="Preview", width=70, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._preview_clicked).pack(side="left", padx=(6, 0))
 
-        preview = ctk.CTkFrame(self)
+        preview = ctk.CTkFrame(self, fg_color=COLOR_PANEL)
         preview.pack(fill="x", padx=pad_x, pady=(8, 6))
         self.thumbnail_label = ctk.CTkLabel(preview, text="", width=120, height=68)
         self.thumbnail_label.pack(side="left", padx=(8, 10), pady=8)
@@ -115,10 +123,10 @@ class VideoDownloaderApp(ctk.CTk):
         ctk.CTkLabel(left, text="Output Folder", anchor="w").pack(fill="x")
         folder_row = ctk.CTkFrame(left, fg_color="transparent")
         folder_row.pack(fill="x", pady=(2, 8))
-        self.folder_entry = ctk.CTkEntry(folder_row)
+        self.folder_entry = ctk.CTkEntry(folder_row, fg_color=COLOR_PANEL)
         self.folder_entry.pack(side="left", fill="x", expand=True)
         self.folder_entry.insert(0, self.cfg.get("output_folder", str(Path.home() / "Downloads")))
-        ctk.CTkButton(folder_row, text="Browse", width=68, command=self._browse_folder).pack(side="left", padx=(6, 0))
+        ctk.CTkButton(folder_row, text="Browse", width=68, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._browse_folder).pack(side="left", padx=(6, 0))
 
         ctk.CTkLabel(left, text="Download Quality", anchor="w").pack(fill="x")
         self.quality_var = ctk.StringVar(value=self.cfg.get("quality", "best"))
@@ -135,12 +143,15 @@ class VideoDownloaderApp(ctk.CTk):
             left,
             values=list(self.quality_labels.values()),
             variable=self.quality_display_var,
+            selected_color=COLOR_ACCENT,
+            selected_hover_color=COLOR_ACCENT_HOVER,
             command=lambda label: self.quality_var.set(quality_values_by_label[label]),
         )
         quality_segmented.pack(fill="x", pady=(2, 6))
         self.mute_var = ctk.BooleanVar(value=not self.cfg.get("include_audio", True))
         self.include_audio_checkbox = ctk.CTkCheckBox(
-            left, text="No sound (mute video)", variable=self.mute_var
+            left, text="No sound (mute video)", variable=self.mute_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
         )
         self.include_audio_checkbox.pack(anchor="w", pady=(5, 0))
         self.quality_var.trace_add("write", self._update_audio_option)
@@ -151,31 +162,39 @@ class VideoDownloaderApp(ctk.CTk):
         ctk.CTkOptionMenu(
             right, variable=self.duplicate_var,
             values=["Rename automatically", "Overwrite", "Ask me"],
+            fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
         ).pack(fill="x", pady=(2, 12))
         self.keep_original_var = ctk.BooleanVar(value=self.cfg.get("keep_original", False))
         ctk.CTkCheckBox(
             right, text="Keep original video when making MP3", variable=self.keep_original_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
         ).pack(anchor="w", pady=2)
         self.open_folder_var = ctk.BooleanVar(value=self.cfg.get("open_folder_when_finished", True))
-        ctk.CTkCheckBox(right, text="Open folder when queue finishes", variable=self.open_folder_var).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            right, text="Open folder when queue finishes", variable=self.open_folder_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
         self.remove_completed_var = ctk.BooleanVar(value=self.cfg.get("remove_completed", False))
-        ctk.CTkCheckBox(right, text="Remove completed items automatically", variable=self.remove_completed_var).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            right, text="Remove completed items automatically", variable=self.remove_completed_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
 
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=pad_x, pady=(12, 8))
-        self.add_btn = ctk.CTkButton(actions, text="Add to Queue", command=self._add_to_queue)
+        self.add_btn = ctk.CTkButton(actions, text="Add to Queue", fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._add_to_queue)
         self.add_btn.pack(side="left", fill="x", expand=True)
-        self.start_btn = ctk.CTkButton(actions, text="Start Queue", command=self._start_queue)
+        self.start_btn = ctk.CTkButton(actions, text="Start Queue", fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._start_queue)
         self.start_btn.pack(side="left", fill="x", expand=True, padx=8)
         self.cancel_btn = ctk.CTkButton(actions, text="Pause Current", fg_color="#9b6b30", command=self._cancel_current)
         self.cancel_btn.pack(side="left", fill="x", expand=True)
 
         ctk.CTkLabel(self, text="Download Queue", anchor="w").pack(fill="x", padx=pad_x)
-        list_frame = ctk.CTkFrame(self)
+        list_frame = ctk.CTkFrame(self, fg_color=COLOR_PANEL)
         list_frame.pack(fill="both", expand=True, padx=pad_x, pady=(3, 6))
         self.queue_listbox = tk.Listbox(
-            list_frame, selectmode=tk.SINGLE, activestyle="none", bg="#202020", fg="#eeeeee",
-            selectbackground="#1f6aa5", selectforeground="#ffffff", borderwidth=0,
+            list_frame, selectmode=tk.SINGLE, activestyle="none", bg=COLOR_PANEL, fg="#eeeeee",
+            selectbackground=COLOR_ACCENT, selectforeground="#ffffff", borderwidth=0,
             highlightthickness=0, font=("Segoe UI", 10),
         )
         self.queue_listbox.pack(side="left", fill="both", expand=True, padx=8, pady=8)
@@ -185,12 +204,12 @@ class VideoDownloaderApp(ctk.CTk):
 
         history_actions = ctk.CTkFrame(self, fg_color="transparent")
         history_actions.pack(fill="x", padx=pad_x, pady=(0, 8))
-        ctk.CTkButton(history_actions, text="Remove Selected", width=125, command=self._remove_selected).pack(side="left")
-        ctk.CTkButton(history_actions, text="Open Selected File", width=135, command=self._open_selected_file).pack(side="left", padx=8)
-        ctk.CTkButton(history_actions, text="Open Selected Folder", width=145, command=self._open_selected_folder).pack(side="left")
-        ctk.CTkButton(history_actions, text="Clear Completed", width=120, command=self._clear_completed).pack(side="right")
+        ctk.CTkButton(history_actions, text="Remove Selected", width=125, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._remove_selected).pack(side="left")
+        ctk.CTkButton(history_actions, text="Open Selected File", width=135, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._open_selected_file).pack(side="left", padx=8)
+        ctk.CTkButton(history_actions, text="Open Selected Folder", width=145, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._open_selected_folder).pack(side="left")
+        ctk.CTkButton(history_actions, text="Clear Completed", width=120, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._clear_completed).pack(side="right")
 
-        self.progress_bar = ctk.CTkProgressBar(self)
+        self.progress_bar = ctk.CTkProgressBar(self, progress_color=COLOR_ACCENT)
         self.progress_bar.set(0)
         self.progress_bar.pack(fill="x", padx=pad_x, pady=(2, 3))
         self.status_label = ctk.CTkLabel(self, text="Add a link to begin.", anchor="w")
@@ -348,14 +367,13 @@ class VideoDownloaderApp(ctk.CTk):
         self._refresh_queue()
         self.status_label.configure(text="Added to queue. You can add another link or start downloading.")
         self._clear_url()
-        self._clear_url()
 
     def _save_settings(self, output_folder: str):
         self.cfg.update({
             "output_folder": output_folder, "quality": self.quality_var.get(),
             "include_audio": not self.mute_var.get(), "keep_original": self.keep_original_var.get(),
             "duplicate_mode": self.duplicate_var.get(), "open_folder_when_finished": self.open_folder_var.get(),
-            "remove_completed": self.remove_completed_var.get(), "last_url": self.url_entry.get().strip(),
+            "remove_completed": self.remove_completed_var.get(),
         })
         settings_module.save_settings(self.cfg)
 
