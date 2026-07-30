@@ -14,9 +14,9 @@ APP_NAME = "VideoDownloader"
 DEFAULTS = {
     "output_folder": str(Path.home() / "Videos" / "Downloads"),
     "quality": "best",  # "best" | "1080p" | "audio_only"
+    "audio_bitrate": "192",  # "128" | "192" | "256" | "320"
     "delete_temp_on_error": True,
     "open_folder_when_finished": True,
-    "last_url": "",
 }
 
 

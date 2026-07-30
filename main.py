@@ -1,4 +1,6 @@
+
 """A simple queue-based desktop front end for yt-dlp."""
+
 import os
 import shutil
 import sys
@@ -8,6 +10,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from urllib.request import urlopen
+
 from tkinter import filedialog, messagebox
 
 # When packaged as an .exe, make bundled tools such as FFmpeg discoverable.
@@ -51,6 +54,7 @@ class QueueItem:
     include_audio: bool
     keep_original: bool
     duplicate_mode: str
+    audio_bitrate: str = "192"
     title: str = "Video link"
     status: str = "Waiting"
     filepath: str | None = None
@@ -83,7 +87,6 @@ class VideoDownloaderApp(ctk.CTk):
 
     def _build_ui(self):
         pad_x = 20
-
         ctk.CTkLabel(self, text="Video Downloader", font=ctk.CTkFont(size=22, weight="bold")).pack(
             pady=(16, 2)
         )
@@ -147,13 +150,25 @@ class VideoDownloaderApp(ctk.CTk):
             command=lambda label: self.quality_var.set(quality_values_by_label[label]),
         )
         quality_segmented.pack(fill="x", pady=(2, 6))
-
         self.mute_var = ctk.BooleanVar(value=not self.cfg.get("include_audio", True))
         self.include_audio_checkbox = ctk.CTkCheckBox(
             left, text="No sound (mute video)", variable=self.mute_var,
             fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
         )
         self.include_audio_checkbox.pack(anchor="w", pady=(5, 0))
+
+        bitrate_row = ctk.CTkFrame(left, fg_color="transparent")
+        bitrate_row.pack(fill="x", pady=(6, 0))
+        ctk.CTkLabel(bitrate_row, text="MP3 Bitrate", anchor="w").pack(side="left")
+        self.bitrate_var = ctk.StringVar(value=self.cfg.get("audio_bitrate", "192"))
+        self.bitrate_menu = ctk.CTkOptionMenu(
+            bitrate_row, variable=self.bitrate_var,
+            values=["128", "192", "256", "320"],
+            width=90, fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
+        )
+        self.bitrate_menu.pack(side="left", padx=(8, 0))
+        ctk.CTkLabel(bitrate_row, text="kbps", anchor="w", text_color="gray60").pack(side="left", padx=(4, 0))
+
         self.quality_var.trace_add("write", self._update_audio_option)
         self._update_audio_option()
 
@@ -164,19 +179,16 @@ class VideoDownloaderApp(ctk.CTk):
             values=["Rename automatically", "Overwrite", "Ask me"],
             fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
         ).pack(fill="x", pady=(2, 12))
-
         self.keep_original_var = ctk.BooleanVar(value=self.cfg.get("keep_original", False))
         ctk.CTkCheckBox(
             right, text="Keep original video when making MP3", variable=self.keep_original_var,
             fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
         ).pack(anchor="w", pady=2)
-
         self.open_folder_var = ctk.BooleanVar(value=self.cfg.get("open_folder_when_finished", True))
         ctk.CTkCheckBox(
             right, text="Open folder when queue finishes", variable=self.open_folder_var,
             fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
         ).pack(anchor="w", pady=2)
-
         self.remove_completed_var = ctk.BooleanVar(value=self.cfg.get("remove_completed", False))
         ctk.CTkCheckBox(
             right, text="Remove completed items automatically", variable=self.remove_completed_var,
@@ -215,7 +227,6 @@ class VideoDownloaderApp(ctk.CTk):
         self.progress_bar = ctk.CTkProgressBar(self, progress_color=COLOR_ACCENT)
         self.progress_bar.set(0)
         self.progress_bar.pack(fill="x", padx=pad_x, pady=(2, 3))
-
         self.status_label = ctk.CTkLabel(self, text="Add a link to begin.", anchor="w")
         self.status_label.pack(fill="x", padx=pad_x, pady=(0, 12))
 
@@ -242,14 +253,14 @@ class VideoDownloaderApp(ctk.CTk):
         menu.add_command(label="Copy", command=lambda: self.url_entry.event_generate("<<Copy>>"))
         menu.add_command(label="Cut", command=lambda: self.url_entry.event_generate("<<Cut>>"))
         menu.add_separator()
-        menu.add_command(label="Select All", command=lambda: self.url_entry.select_range(0, "end"))
+        menu.add_command(label="Select All", command=lambda: self.url_entry._entry.select_range(0, "end"))
         menu.tk_popup(event.x_root, event.y_root)
         menu.grab_release()
 
     def _update_audio_option(self, *_args):
-        self.include_audio_checkbox.configure(
-            state="disabled" if self.quality_var.get() == "audio_only" else "normal"
-        )
+        is_audio_only = self.quality_var.get() == "audio_only"
+        self.include_audio_checkbox.configure(state="disabled" if is_audio_only else "normal")
+        self.bitrate_menu.configure(state="normal" if is_audio_only else "disabled")
 
     def _check_clipboard_for_url(self):
         if not HAS_CLIPBOARD:
@@ -292,10 +303,8 @@ class VideoDownloaderApp(ctk.CTk):
             count = len(info.get("entries") or [])
             self.thumbnail_label.configure(image=None, text="")
             self.preview_image = None
-            unresolved = info.get("unresolved_count") or 0
-            extra = f"\n{unresolved} entries couldn't be read and will be skipped" if unresolved else ""
             self.preview_label.configure(
-                text=f"Playlist: {info.get('playlist_title', 'Playlist')}\n{count} videos found{extra}"
+                text=f"Playlist: {info.get('playlist_title', 'Playlist')}\n{count} videos found"
             )
             return
         duration = info.get("duration")
@@ -323,7 +332,6 @@ class VideoDownloaderApp(ctk.CTk):
         if not downloader.is_valid_url(url):
             messagebox.showerror("Invalid URL", "Paste a valid http:// or https:// video link first.")
             return
-
         output_folder = self.folder_entry.get().strip()
         try:
             Path(output_folder).mkdir(parents=True, exist_ok=True)
@@ -332,6 +340,7 @@ class VideoDownloaderApp(ctk.CTk):
             return
 
         previewed = self.preview_url == url and self.preview_info
+
         if previewed and self.preview_info.get("is_playlist"):
             entries = self.preview_info.get("entries") or []
             if not entries:
@@ -340,25 +349,20 @@ class VideoDownloaderApp(ctk.CTk):
                 )
                 return
             playlist_title = self.preview_info.get("playlist_title", "this playlist")
-            unresolved = self.preview_info.get("unresolved_count") or 0
-            unresolved_note = (
-                f"\n\n({unresolved} additional entries couldn't be read and will be skipped.)"
-                if unresolved else ""
-            )
             add_all = messagebox.askyesno(
                 "Playlist Detected",
                 f"\"{playlist_title}\" has {len(entries)} videos.\n\n"
                 "Add all of them to the queue? Each video downloads and can be "
                 "paused/resumed separately.\n\n"
-                "Choose No to add only the single link you pasted instead."
-                f"{unresolved_note}",
+                "Choose No to add only the single link you pasted instead.",
             )
             if add_all:
                 for entry in entries:
                     self.queue.append(QueueItem(
                         url=entry["url"], output_folder=output_folder, quality=self.quality_var.get(),
                         include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
-                        duplicate_mode=self.duplicate_var.get(), title=entry.get("title", "Video link"),
+                        duplicate_mode=self.duplicate_var.get(), audio_bitrate=self.bitrate_var.get(),
+                        title=entry.get("title", "Video link"),
                     ))
                 self._save_settings(output_folder)
                 self._refresh_queue()
@@ -373,7 +377,7 @@ class VideoDownloaderApp(ctk.CTk):
         self.queue.append(QueueItem(
             url=url, output_folder=output_folder, quality=self.quality_var.get(),
             include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
-            duplicate_mode=self.duplicate_var.get(), title=title,
+            duplicate_mode=self.duplicate_var.get(), audio_bitrate=self.bitrate_var.get(), title=title,
         ))
         self._save_settings(output_folder)
         self._refresh_queue()
@@ -385,7 +389,7 @@ class VideoDownloaderApp(ctk.CTk):
             "output_folder": output_folder, "quality": self.quality_var.get(),
             "include_audio": not self.mute_var.get(), "keep_original": self.keep_original_var.get(),
             "duplicate_mode": self.duplicate_var.get(), "open_folder_when_finished": self.open_folder_var.get(),
-            "remove_completed": self.remove_completed_var.get(),
+            "remove_completed": self.remove_completed_var.get(), "audio_bitrate": self.bitrate_var.get(),
         })
         settings_module.save_settings(self.cfg)
 
@@ -393,7 +397,7 @@ class VideoDownloaderApp(ctk.CTk):
         self.queue_listbox.delete(0, tk.END)
         for item in self.queue:
             label = item.title if item.title != "Video link" else item.url
-            self.queue_listbox.insert(tk.END, f"[{item.status}] {label}")
+            self.queue_listbox.insert(tk.END, f"[{item.status}]  {label}")
 
     def _start_queue(self):
         if self.queue_thread and self.queue_thread.is_alive():
@@ -426,7 +430,7 @@ class VideoDownloaderApp(ctk.CTk):
                     url=item.url, output_dir=item.output_folder, quality=item.quality,
                     include_audio=item.include_audio, keep_original=item.keep_original,
                     duplicate_mode=item.duplicate_mode, cancel_event=self.cancel_event,
-                    duplicate_callback=self._ask_duplicate_action,
+                    duplicate_callback=self._ask_duplicate_action, audio_bitrate=item.audio_bitrate,
                     progress_callback=lambda info, queued_item=item: self._queue_progress(queued_item, info),
                 )
                 item.title = result.title
@@ -435,11 +439,6 @@ class VideoDownloaderApp(ctk.CTk):
             except downloader.DownloadCancelled:
                 item.status = "Paused"
                 self.cancel_event.set()
-            except downloader.DownloadSkipped as exc:
-                # A deliberate user choice, not a failure - keep it visually
-                # distinct in the queue so it isn't mistaken for a real error.
-                item.status = "Skipped"
-                item.error = str(exc)
             except Exception as exc:  # noqa: BLE001
                 item.status = "Failed"
                 item.error = str(exc)
@@ -480,7 +479,7 @@ class VideoDownloaderApp(ctk.CTk):
 
     def _show_download_progress(self, percent: float, speed: str, eta: str):
         self.progress_bar.set(percent / 100)
-        self.status_label.configure(text=f"Downloading: {percent:.0f}% • {speed} • ETA {eta}")
+        self.status_label.configure(text=f"Downloading: {percent:.0f}%  •  {speed}  •  ETA {eta}")
 
     def _show_processing(self):
         self.progress_bar.set(1)
@@ -493,11 +492,11 @@ class VideoDownloaderApp(ctk.CTk):
             )
         else:
             self.status_label.configure(text="Queue finished.")
-        if self.open_folder_var.get() and self.queue:
-            try:
-                os.startfile(self.queue[-1].output_folder)
-            except OSError:
-                pass
+            if self.open_folder_var.get() and self.queue:
+                try:
+                    os.startfile(self.queue[-1].output_folder)
+                except OSError:
+                    pass
         if self.remove_completed_var.get():
             self.queue = [item for item in self.queue if item.status != "Done"]
         self._refresh_queue()
@@ -517,7 +516,7 @@ class VideoDownloaderApp(ctk.CTk):
         self._refresh_queue()
 
     def _clear_completed(self):
-        self.queue = [item for item in self.queue if item.status not in {"Done", "Failed", "Skipped"}]
+        self.queue = [item for item in self.queue if item.status not in {"Done", "Failed"}]
         self._refresh_queue()
 
     def _open_selected_file(self):
