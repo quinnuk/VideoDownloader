@@ -4,13 +4,7 @@ A modern Windows video downloader with a simple, user-friendly interface powered
 
 Download videos and audio from your favourite websites with support for thousands of online platforms.
 
-[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/quinnuk/VideoDownloader/releases/latest) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://www.python.org/) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
-<p align="center">
-  <a href="https://github.com/quinnuk/VideoDownloader/releases/latest/download/VideoDownloader-Setup.exe">
-    <img src="https://img.shields.io/badge/⬇%20Download%20for%20Windows-VideoDownloader--Setup.exe-blue?style=for-the-badge&logo=windows" alt="Download Video Downloader Pro for Windows">
-  </a>
-</p>
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
   <a href="https://buymeacoffee.com/quinnuk" target="_blank">
@@ -51,6 +45,7 @@ Before downloading, preview:
 ### 🎵 Audio Extraction
 
 - Extract audio as MP3
+- Choose your MP3 bitrate (128 / 192 / 256 / 320 kbps)
 - Select download quality
 - Keep your preferred settings
 
@@ -106,7 +101,7 @@ Or on Windows, just double-click `run.bat`.
 
 1. Paste a video link into the **Video URL** box (or copy one — it's detected automatically).
 2. Click **Preview** to check the title, uploader, duration, and thumbnail before downloading. Pasting a playlist link shows the video count instead, and lets you add the whole playlist or just that one link.
-3. Choose your **Download Quality** (Best Available, Up to 1080p, or Audio Only/MP3) and output folder.
+3. Choose your **Download Quality** (Best Available, Up to 1080p, or Audio Only/MP3) and output folder. If you pick Audio Only, you can also set the **MP3 Bitrate**.
 4. Click **Add to Queue** — repeat for as many links as you like.
 5. Click **Start Queue** to begin downloading. Progress, speed, and ETA are shown live.
 6. Once finished, use **Open Selected File** or **Open Selected Folder** to jump straight to your download.
