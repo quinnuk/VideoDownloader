@@ -70,7 +70,7 @@ Before downloading, preview:
 
 [![Download Latest Version](https://img.shields.io/badge/Download-Latest%20Version-blue?style=for-the-badge&logo=windows)](https://github.com/quinnuk/VideoDownloader/releases/latest/download/VideoDownloader-Setup.exe)
 
-Run the installer and follow the instructions.
+Run the installer and follow the instructions. FFmpeg is bundled, so there's nothing extra to install.
 
 > **Note:** Since this app isn't code-signed, Windows SmartScreen may show a "Windows protected your PC" warning the first time you run the installer. This is normal for small independent apps — click **More info**, then **Run anyway** to continue.
 
@@ -80,6 +80,7 @@ Requirements:
 
 - Windows 10/11
 - Python 3.x
+- **[FFmpeg](https://ffmpeg.org/download.html)** — required for merging video/audio streams and MP3 extraction. Must be on your system `PATH`.
 
 Install dependencies:
 
