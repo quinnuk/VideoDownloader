@@ -14,6 +14,8 @@ from pathlib import Path
 
 from settings import app_data_dir
 
+APP_NAME = "VideoDownloader"
+
 
 def _log_dir() -> Path:
     log_dir = app_data_dir() / "logs"
