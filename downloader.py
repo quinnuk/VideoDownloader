@@ -140,13 +140,17 @@ def classify_error(exc: Exception) -> tuple[str, str]:
     return reason, detail
 
 
-def get_video_info(url: str) -> dict:
+def get_video_info(url: str, cookies_from_browser: str | None = None) -> dict:
     """Return lightweight information for the preview panel without downloading.
 
     If the URL points at a playlist, returns {"is_playlist": True, "playlist_title": ...,
     "entries": [{"url": ..., "title": ...}, ...]} using yt-dlp's flat extraction, which is
     fast even for large playlists since it doesn't fetch full metadata per video.
     Otherwise returns the usual single-video info shape with "is_playlist": False.
+
+    cookies_from_browser: browser name ("chrome", "edge", "firefox", "brave", ...)
+    to read sign-in cookies from, or None to probe without cookies. Read directly
+    by yt-dlp; never stored, displayed, or logged by this app.
     """
     probe_options = {
         "noplaylist": False,
@@ -154,6 +158,8 @@ def get_video_info(url: str) -> dict:
         "no_warnings": True,
         "extract_flat": "in_playlist",
     }
+    if cookies_from_browser:
+        probe_options["cookiesfrombrowser"] = (cookies_from_browser,)
     with yt_dlp.YoutubeDL(probe_options) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -205,6 +211,7 @@ def download_video(
     speed_limit_bytes: Optional[int] = None,
     retry_attempts: int = 3,
     retry_delay: int = 5,
+    cookies_from_browser: Optional[str] = None,
 ) -> DownloadResult:
     """Download one item, optionally without sound, and report its progress.
 
@@ -214,6 +221,10 @@ def download_video(
     `control.request_cancel()` was called instead, the hook raises
     DownloadCancelled; the caller is expected to remove the partial file
     since the download has been abandoned rather than paused.
+
+    cookies_from_browser: browser name ("chrome", "edge", "firefox", "brave", ...)
+    to read sign-in cookies from for this download, or None to download without
+    cookies. Read directly by yt-dlp; never stored, displayed, or logged by this app.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     is_audio = quality == "audio_only"
@@ -250,6 +261,8 @@ def download_video(
     output_template = str(Path(output_dir) / "%(title)s.%(ext)s")
     if duplicate_mode == "Ask me":
         probe_options = {"outtmpl": output_template, "noplaylist": True, "quiet": True, "no_warnings": True}
+        if cookies_from_browser:
+            probe_options["cookiesfrombrowser"] = (cookies_from_browser,)
         with yt_dlp.YoutubeDL(probe_options) as probe:
             probe_info = probe.extract_info(url, download=False)
             existing_path = Path(probe.prepare_filename(probe_info))
@@ -290,6 +303,8 @@ def download_video(
     }
     if speed_limit_bytes:
         ydl_opts["ratelimit"] = speed_limit_bytes
+    if cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
     if duplicate_mode == "Rename automatically":
         ydl_opts["outtmpl"] = str(Path(output_dir) / "%(title)s [%(id)s].%(ext)s")
     elif duplicate_mode == "Overwrite":

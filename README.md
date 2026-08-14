@@ -23,8 +23,8 @@ Download videos and audio from your favourite websites with support for thousand
 - Download videos from YouTube, Vimeo, TikTok, Reddit, Facebook, X/Twitter and many more
 - Powered by the reliable **yt-dlp** engine
 - Supports thousands of websites
-- Paste a playlist link and choose **Add All**, **Select Videos** (pick individual ones), or a **range** (e.g. `1,3,7,10-15`)
-- Optional browser cookies (Chrome/Edge/Firefox/Brave) for sites that require sign-in — read directly by yt-dlp, never stored, displayed, or logged by this app
+- Paste a playlist link and choose **Select All/None**, check individual videos, or type a **range** (e.g. `1,3,7,10-15`) — or just add the single pasted link instead
+- Optional browser cookies (Chrome/Edge/Firefox/Brave), set once in **Settings > Preferences**, for sites that require sign-in — read directly by yt-dlp, never stored, displayed, or logged by this app
 
 ### 👀 Video Preview
 
@@ -45,6 +45,7 @@ Before downloading, preview:
 - Queue is remembered between sessions — you'll be asked whether to resume it on next launch
 - Persistent download history (separate from the live queue), with redownload/copy-link/open-folder actions
 - Drag & drop a link onto the window, or use keyboard shortcuts (Ctrl+Enter to queue, Space to pause/resume, Delete to remove, and more — see the Help menu)
+- Right-click any item in the queue for actions (retry, remove, open file/folder, move up/down, and more) instead of a wall of buttons
 - Optional desktop notifications and a sound when the queue finishes
 - Reliable duplicate detection, even when links differ only by tracking parameters
 
@@ -58,10 +59,11 @@ Before downloading, preview:
 
 ### ⚙️ Smart Features
 
-- Remembers your settings; export/import/reset them from the Settings menu
+- Remembers your settings; export/import/reset them from **Settings > Preferences**
+- Everyday, per-download choices (quality, format, subtitles, output folder) stay on the main screen; things you set once (speed limit, simultaneous downloads, notifications, duplicate handling, browser cookies) live in the Settings dialog to keep the window compact
 - Clipboard URL detection
 - Robust FFmpeg detection (bundled copy, app folder, or system PATH)
-- One-click check for yt-dlp updates from the Help menu
+- One-click yt-dlp updates from the Help menu — checks your version against the latest release and installs it for you, whether you're running from source or the packaged .exe (takes effect on restart)
 - Simple Windows desktop interface
 
 ---
@@ -109,13 +111,13 @@ Or on Windows, just double-click `run.bat`.
 ## ▶️ Usage
 
 1. Paste a video link into the **Video URL** box (or copy one — it's detected automatically), or drag a link onto the window.
-2. Click **Preview** to check the title, uploader, duration, and thumbnail before downloading. Pasting a playlist link offers **Add All**, **Select Videos**, or a range.
+2. Click **Preview** to check the title, uploader, duration, and thumbnail before downloading. Pasting a playlist link opens a picker instead.
 3. Choose your **Download Quality** (Best Available down to 360p, or Audio Only/MP3), **Format**, **Subtitles**, and output folder. If you pick Audio Only, you can also set the **MP3 Bitrate**.
-4. Click **Add to Queue** — repeat for as many links as you like.
+4. Click **Add to Queue** — repeat for as many links as you like. Pasting a playlist link opens a picker where you can select all, check individual videos, or type a range.
 5. Click **Start Queue** to begin downloading. Live progress, queue statistics, and overall progress are shown as it runs; use **Pause Selected** or **Stop Queue** at any time — both resume properly rather than restarting from zero.
-6. Once finished, use **Open Selected File**/**Open Selected Folder**, or check the **History** button for anything downloaded previously.
+6. Once finished, right-click a queue item (or use the **History** button) for open-file/open-folder/redownload actions.
 
-Check the **Settings** and **Help** menus for speed limiting, simultaneous downloads, notifications, browser cookies, keyboard shortcuts, and settings export/import.
+Check the **Settings** menu for speed limiting, simultaneous downloads, notifications, browser cookies, and settings export/import/reset, and the **Help** menu for keyboard shortcuts, troubleshooting, and **Check for yt-dlp Updates** — if a newer version is available, click **Update Now** (or **Download & Install** on the packaged .exe) and restart the app to pick it up. This is the fastest fix if downloads suddenly start failing on a site that used to work, since sites change things yt-dlp needs updating for.
 
 ---
 

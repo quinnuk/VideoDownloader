@@ -26,14 +26,14 @@ class PreviewLoader:
         self.root = root
         self._current_id = 0
 
-    def request(self, url: str, on_success, on_error) -> None:
+    def request(self, url: str, on_success, on_error, cookies_from_browser: str | None = None) -> None:
         """Start a new preview lookup. Any in-flight older request is
         implicitly superseded - its result will be dropped when it arrives.
         """
         self._current_id += 1
         request_id = self._current_id
         threading.Thread(
-            target=self._load, args=(url, request_id, on_success, on_error), daemon=True,
+            target=self._load, args=(url, request_id, on_success, on_error, cookies_from_browser), daemon=True,
         ).start()
 
     def load_thumbnail(self, thumbnail_url: str, on_loaded) -> None:
@@ -48,9 +48,9 @@ class PreviewLoader:
             target=self._load_thumbnail, args=(thumbnail_url, request_id, on_loaded), daemon=True,
         ).start()
 
-    def _load(self, url: str, request_id: int, on_success, on_error) -> None:
+    def _load(self, url: str, request_id: int, on_success, on_error, cookies_from_browser: str | None = None) -> None:
         try:
-            info = downloader.get_video_info(url)
+            info = downloader.get_video_info(url, cookies_from_browser=cookies_from_browser)
         except Exception as exc:  # noqa: BLE001
             self.root.after(0, self._deliver, request_id, on_error, exc)
             return

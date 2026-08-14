@@ -8,9 +8,13 @@ PreviewLoader) rather than containing queue or download logic itself.
 Architecture: UI -> Queue Manager -> Download Manager -> Downloader -> yt-dlp.
 """
 
+import json
 import os
+import subprocess
+import sys
 import threading
 import tkinter as tk
+import urllib.request
 from pathlib import Path
 
 from tkinter import filedialog, messagebox
@@ -30,6 +34,7 @@ from queue_manager import QueueManager
 from thumbnail import PreviewLoader
 from tool_check import missing_tools_message
 from utils import COLOR_ACCENT, COLOR_ACCENT_HOVER, COLOR_BG, COLOR_DANGER, COLOR_DANGER_HOVER, COLOR_PANEL, REPO_URL
+import ytdlp_updater
 
 # Drag-and-drop is optional: if tkinterdnd2 isn't installed, the app runs
 # exactly as before, just without the ability to drag a link onto the window.
@@ -63,8 +68,8 @@ class VideoDownloaderApp(_AppBase):
         super().__init__()
         self.configure(fg_color=COLOR_BG)
         self.title("Video Downloader")
-        self.geometry("720x900")
-        self.minsize(660, 760)
+        self.geometry("720x680")
+        self.minsize(660, 560)
 
         self.app_logger = logging_setup.setup_logging()
         self.app_logger.info("Application started")
@@ -128,12 +133,17 @@ class VideoDownloaderApp(_AppBase):
         )
         self.preview_label.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=8)
 
+        # Only the choices that change per-download live in the main window.
+        # Settings that are set once and rarely touched again (speed limit,
+        # simultaneous downloads, notifications, duplicate handling, browser
+        # cookies, etc.) live in the Settings dialog reached from the menu
+        # bar - see _open_settings_dialog(). Their variables are still
+        # created here so the rest of the app can read them regardless of
+        # whether the dialog has ever been opened.
         options = ctk.CTkFrame(self, fg_color="transparent")
         options.pack(fill="x", padx=pad_x)
         left = ctk.CTkFrame(options, fg_color="transparent")
         left.pack(side="left", fill="both", expand=True)
-        right = ctk.CTkFrame(options, fg_color="transparent")
-        right.pack(side="left", fill="both", expand=True, padx=(16, 0))
 
         ctk.CTkLabel(left, text="Output Folder", anchor="w").pack(fill="x")
         folder_row = ctk.CTkFrame(left, fg_color="transparent")
@@ -223,75 +233,19 @@ class VideoDownloaderApp(_AppBase):
         self.quality_var.trace_add("write", self._update_audio_option)
         self._update_audio_option()
 
-        ctk.CTkLabel(right, text="If a file already exists", anchor="w").pack(fill="x")
+        # --- Settings-dialog-only variables (no widgets built here) ---
         self.duplicate_var = ctk.StringVar(value=self.cfg.get("duplicate_mode", "Rename automatically"))
-        ctk.CTkOptionMenu(
-            right, variable=self.duplicate_var,
-            values=["Rename automatically", "Overwrite", "Ask me"],
-            fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
-        ).pack(fill="x", pady=(2, 12))
         self.keep_original_var = ctk.BooleanVar(value=self.cfg.get("keep_original", False))
-        ctk.CTkCheckBox(
-            right, text="Keep original video when making MP3", variable=self.keep_original_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
         self.open_folder_var = ctk.BooleanVar(value=self.cfg.get("open_folder_when_finished", True))
-        ctk.CTkCheckBox(
-            right, text="Open folder when queue finishes", variable=self.open_folder_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
         self.remove_completed_var = ctk.BooleanVar(value=self.cfg.get("remove_completed", False))
-        ctk.CTkCheckBox(
-            right, text="Remove completed items automatically", variable=self.remove_completed_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
-
-        ctk.CTkLabel(right, text="Download Speed Limit", anchor="w").pack(fill="x", pady=(10, 0))
-        speed_row = ctk.CTkFrame(right, fg_color="transparent")
-        speed_row.pack(fill="x", pady=(2, 0))
         self.speed_limit_var = ctk.StringVar(value=self.cfg.get("speed_limit", "Unlimited"))
-        self.speed_limit_menu = ctk.CTkOptionMenu(
-            speed_row, variable=self.speed_limit_var,
-            values=["Unlimited", "1 MB/s", "2 MB/s", "5 MB/s", "10 MB/s", "Custom"],
-            width=120, fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
-            command=lambda _label: self._update_speed_limit_entry(),
-        )
-        self.speed_limit_menu.pack(side="left")
         self.speed_limit_custom_var = ctk.StringVar(value=str(self.cfg.get("speed_limit_custom_mbps", 5)))
-        self.speed_limit_custom_entry = ctk.CTkEntry(speed_row, width=60, fg_color=COLOR_PANEL)
-        self.speed_limit_custom_entry.insert(0, self.speed_limit_custom_var.get())
-        self.speed_limit_custom_entry.pack(side="left", padx=(8, 4))
-        ctk.CTkLabel(speed_row, text="MB/s", anchor="w", text_color="gray60").pack(side="left")
-        self._update_speed_limit_entry()
-
-        ctk.CTkLabel(right, text="Simultaneous Downloads", anchor="w").pack(fill="x", pady=(10, 0))
         self.simultaneous_var = ctk.StringVar(value=str(self.cfg.get("simultaneous_downloads", 1)))
-        ctk.CTkOptionMenu(
-            right, variable=self.simultaneous_var, values=["1", "2", "3", "4"], width=90,
-            fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
-        ).pack(anchor="w", pady=(2, 0))
-
-        ctk.CTkLabel(right, text="Notifications", anchor="w").pack(fill="x", pady=(10, 0))
         self.notify_complete_var = ctk.BooleanVar(value=self.cfg.get("notify_on_complete", False))
-        ctk.CTkCheckBox(
-            right, text="Notify when a download completes", variable=self.notify_complete_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
         self.notify_failure_var = ctk.BooleanVar(value=self.cfg.get("notify_on_failure", True))
-        ctk.CTkCheckBox(
-            right, text="Notify when a download fails", variable=self.notify_failure_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
         self.notify_queue_var = ctk.BooleanVar(value=self.cfg.get("notify_on_queue_complete", True))
-        ctk.CTkCheckBox(
-            right, text="Notify when the queue completes", variable=self.notify_queue_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
         self.play_sound_var = ctk.BooleanVar(value=self.cfg.get("play_sound_on_queue_complete", False))
-        ctk.CTkCheckBox(
-            right, text="Play a sound when the queue finishes", variable=self.play_sound_var,
-            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
-        ).pack(anchor="w", pady=2)
+        self.cookies_browser_var = ctk.StringVar(value=self.cfg.get("cookies_from_browser", "None"))
 
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=pad_x, pady=(12, 8))
@@ -302,7 +256,10 @@ class VideoDownloaderApp(_AppBase):
         self.cancel_btn = ctk.CTkButton(actions, text="Stop Queue", fg_color="#9b6b30", command=self._stop_queue)
         self.cancel_btn.pack(side="left", fill="x", expand=True)
 
-        ctk.CTkLabel(self, text="Download Queue  (double-click a failed item for details)", anchor="w").pack(fill="x", padx=pad_x)
+        ctk.CTkLabel(
+            self, text="Download Queue  (double-click a failed item for details, right-click for actions)",
+            anchor="w",
+        ).pack(fill="x", padx=pad_x)
         list_frame = ctk.CTkFrame(self, fg_color=COLOR_PANEL)
         list_frame.pack(fill="both", expand=True, padx=pad_x, pady=(3, 6))
         self.queue_listbox = tk.Listbox(
@@ -312,29 +269,21 @@ class VideoDownloaderApp(_AppBase):
         )
         self.queue_listbox.pack(side="left", fill="both", expand=True, padx=8, pady=8)
         self.queue_listbox.bind("<Double-Button-1>", self._on_item_double_click)
+        self.queue_listbox.bind("<Button-3>", self._show_queue_context_menu)
         scrollbar = tk.Scrollbar(list_frame, command=self.queue_listbox.yview)
         scrollbar.pack(side="right", fill="y", pady=8, padx=(0, 8))
         self.queue_listbox.configure(yscrollcommand=scrollbar.set)
 
-        reorder_actions = ctk.CTkFrame(self, fg_color="transparent")
-        reorder_actions.pack(fill="x", padx=pad_x, pady=(0, 4))
-        ctk.CTkButton(reorder_actions, text="\u2191 Move Up", width=95, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._move_up).pack(side="left")
-        ctk.CTkButton(reorder_actions, text="\u2193 Move Down", width=105, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._move_down).pack(side="left", padx=8)
-        ctk.CTkButton(reorder_actions, text="\u23f8 Pause Selected", width=130, fg_color="#9b6b30", command=self._pause_selected).pack(side="left")
-        ctk.CTkButton(reorder_actions, text="History", width=90, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._open_history_window).pack(side="right")
-
-        history_actions = ctk.CTkFrame(self, fg_color="transparent")
-        history_actions.pack(fill="x", padx=pad_x, pady=(0, 4))
-        ctk.CTkButton(history_actions, text="Remove Selected", width=125, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._remove_selected).pack(side="left")
-        ctk.CTkButton(history_actions, text="Open Selected File", width=135, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._open_selected_file).pack(side="left", padx=8)
-        ctk.CTkButton(history_actions, text="Open Selected Folder", width=145, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._open_selected_folder).pack(side="left")
-        ctk.CTkButton(history_actions, text="Clear Completed", width=120, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._clear_completed).pack(side="right")
-
-        failed_actions = ctk.CTkFrame(self, fg_color="transparent")
-        failed_actions.pack(fill="x", padx=pad_x, pady=(0, 8))
-        ctk.CTkButton(failed_actions, text="Retry Failed", width=110, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._retry_selected_failed).pack(side="left")
-        ctk.CTkButton(failed_actions, text="Retry All Failed", width=130, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._retry_all_failed).pack(side="left", padx=8)
-        ctk.CTkButton(failed_actions, text="Clear Failed", width=110, fg_color=COLOR_DANGER, hover_color=COLOR_DANGER_HOVER, command=self._clear_failed).pack(side="right")
+        # Per-item actions (move, pause, remove, retry, open, ...) live on
+        # the right-click context menu (_show_queue_context_menu) rather
+        # than as always-visible buttons, since most of them only make
+        # sense for whatever's currently selected. History stays as a
+        # button since it opens its own window rather than acting on the
+        # current selection.
+        quick_actions = ctk.CTkFrame(self, fg_color="transparent")
+        quick_actions.pack(fill="x", padx=pad_x, pady=(0, 8))
+        ctk.CTkButton(quick_actions, text="\u23f8 Pause Selected", width=130, fg_color="#9b6b30", command=self._pause_selected).pack(side="left")
+        ctk.CTkButton(quick_actions, text="History", width=90, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=self._open_history_window).pack(side="right")
 
         self.stats_label = ctk.CTkLabel(self, text="Queue is empty.", anchor="w", font=ctk.CTkFont(size=11), text_color="gray60")
         self.stats_label.pack(fill="x", padx=pad_x, pady=(0, 4))
@@ -350,11 +299,22 @@ class VideoDownloaderApp(_AppBase):
     # ------------------------------------------------------------------ #
     def _build_menu(self):
         menubar = tk.Menu(self)
+
+        settings_menu = tk.Menu(menubar, tearoff=False)
+        settings_menu.add_command(label="Preferences...", command=self._open_settings_dialog)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="Export Settings...", command=self._export_settings)
+        settings_menu.add_command(label="Import Settings...", command=self._import_settings)
+        settings_menu.add_command(label="Reset to Defaults", command=self._reset_settings_to_defaults)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+
         help_menu = tk.Menu(menubar, tearoff=False)
         help_menu.add_command(label="Troubleshooting & Shortcuts", command=self._open_help_window)
+        help_menu.add_command(label="Check for yt-dlp Updates", command=self._check_ytdlp_updates)
         help_menu.add_separator()
         help_menu.add_command(label="About", command=self._open_about_window)
         menubar.add_cascade(label="Help", menu=help_menu)
+
         self.config(menu=menubar)
 
     def _setup_drag_and_drop(self):
@@ -449,14 +409,17 @@ class VideoDownloaderApp(_AppBase):
             "It may have been removed, made private, or restricted in your region "
             "since the link was shared.\n\n"
             "How do I update yt-dlp?\n"
-            "If running from source: pip install -U yt-dlp. If using the installer, "
-            "check for a newer release of the app.\n\n"
+            "Help > Check for yt-dlp Updates compares your version against the latest "
+            "release and can update it for you in one click if you're running from "
+            "source. If you're using the installer, it'll point you to check for a "
+            "newer app release instead.\n\n"
             "Where are my downloads saved?\n"
             "Wherever the Output Folder box points to. Use 'Open Selected Folder' on "
             "any queue item to jump straight there.\n\n"
             "How do I enable cookies?\n"
-            "Browser cookie support for sites that require sign-in isn't available yet "
-            "- it's on the roadmap.\n"
+            "Open Settings > Preferences and pick your browser under Browser Cookies. "
+            "yt-dlp reads them directly from the browser for sites that need sign-in - "
+            "this app never stores, displays, or logs them.\n"
         )
         box.insert("1.0", faq)
         box.configure(state="disabled")
@@ -469,6 +432,292 @@ class VideoDownloaderApp(_AppBase):
         )
         ctk.CTkLabel(dialog, text=shortcuts_text, justify="left", anchor="w", text_color="gray70", wraplength=490).pack(padx=16, pady=(0, 12), anchor="w")
         ctk.CTkButton(dialog, text="Close", fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=dialog.destroy).pack(pady=(0, 14))
+
+    def _check_ytdlp_updates(self):
+        """One-click check: compares the running yt-dlp version against the
+        latest release on PyPI. If running from source, offers a one-click
+        `pip install -U yt-dlp`. If running as a packaged/frozen build,
+        downloads the yt-dlp wheel and installs it into a writable override
+        folder (see ytdlp_updater.py) that shadows the version bundled in
+        the .exe - no pip or admin rights needed, takes effect on restart.
+        """
+        dialog = tk.Toplevel(self)
+        dialog.title("yt-dlp Update Check")
+        dialog.configure(bg=COLOR_BG)
+        dialog.geometry("400x190")
+        dialog.transient(self)
+
+        status_label = ctk.CTkLabel(
+            dialog, text="Checking for updates...", wraplength=360, justify="left", anchor="w",
+        )
+        status_label.pack(fill="x", padx=16, pady=(20, 10))
+
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack(fill="x", padx=16, pady=(0, 14), side="bottom")
+        ctk.CTkButton(btn_row, text="Close", fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=dialog.destroy).pack(side="right")
+
+        is_frozen = getattr(sys, "frozen", False)
+
+        def report(current: str, latest: str | None, wheel_url: str | None):
+            if latest is None:
+                status_label.configure(text=f"Currently running yt-dlp {current}.\nCould not reach PyPI to check for a newer version.")
+                return
+            if current == latest:
+                status_label.configure(text=f"You're on the latest version of yt-dlp ({current}).")
+                return
+            status_label.configure(text=f"Update available: {current} \u2192 {latest}.")
+            button_text = "Download & Install" if is_frozen else "Update Now"
+            ctk.CTkButton(
+                btn_row, text=button_text, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+                command=lambda: do_update(latest, wheel_url),
+            ).pack(side="left")
+
+        def do_update(latest: str, wheel_url: str | None):
+            for child in btn_row.winfo_children():
+                if isinstance(child, ctk.CTkButton) and child.cget("text") in ("Update Now", "Download & Install"):
+                    child.configure(state="disabled", text="Updating...")
+            status_label.configure(text=f"Updating yt-dlp to {latest}...")
+            if is_frozen:
+                threading.Thread(target=run_frozen_update, args=(latest, wheel_url), daemon=True).start()
+            else:
+                threading.Thread(target=run_pip_update, args=(latest,), daemon=True).start()
+
+        def run_pip_update(latest: str):
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
+                    check=True, capture_output=True, text=True,
+                )
+                message = f"yt-dlp updated to {latest}. Restart the app for the change to take effect."
+            except (subprocess.CalledProcessError, OSError) as exc:
+                message = f"Update failed: {exc}\nYou can also run: pip install -U yt-dlp"
+            self.after(0, lambda: status_label.configure(text=message))
+
+        def run_frozen_update(latest: str, wheel_url: str | None):
+            if not wheel_url:
+                message = "Update failed: could not find a yt-dlp wheel to download."
+            else:
+                try:
+                    ytdlp_updater.download_and_install(wheel_url)
+                    message = f"yt-dlp updated to {latest}. Restart the app for the change to take effect."
+                except Exception as exc:  # noqa: BLE001 - report any failure, don't crash the app
+                    message = f"Update failed: {exc}"
+            self.after(0, lambda: status_label.configure(text=message))
+
+        def do_check():
+            try:
+                import yt_dlp
+                current = yt_dlp.version.__version__
+            except Exception:  # noqa: BLE001
+                current = "unknown"
+            result = ytdlp_updater.get_latest_version_and_wheel_url()
+            if result is None:
+                self.after(0, report, current, None, None)
+                return
+            latest, wheel_url = result
+            self.after(0, report, current, latest, wheel_url)
+
+        threading.Thread(target=do_check, daemon=True).start()
+
+    # ------------------------------------------------------------------ #
+    # Settings dialog (Settings > Preferences...): everything that's set
+    # once and rarely touched again, kept out of the main window.
+    # ------------------------------------------------------------------ #
+    def _open_settings_dialog(self):
+        # Snapshot current values so Cancel can restore them exactly.
+        snapshot = {
+            "duplicate_var": self.duplicate_var.get(),
+            "keep_original_var": self.keep_original_var.get(),
+            "open_folder_var": self.open_folder_var.get(),
+            "remove_completed_var": self.remove_completed_var.get(),
+            "speed_limit_var": self.speed_limit_var.get(),
+            "speed_limit_custom_var": self.speed_limit_custom_var.get(),
+            "simultaneous_var": self.simultaneous_var.get(),
+            "notify_complete_var": self.notify_complete_var.get(),
+            "notify_failure_var": self.notify_failure_var.get(),
+            "notify_queue_var": self.notify_queue_var.get(),
+            "play_sound_var": self.play_sound_var.get(),
+            "cookies_browser_var": self.cookies_browser_var.get(),
+        }
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Settings")
+        dialog.configure(bg=COLOR_BG)
+        dialog.geometry("420x560")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        body = ctk.CTkScrollableFrame(dialog, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=16, pady=(16, 8))
+
+        ctk.CTkLabel(body, text="If a file already exists", anchor="w").pack(fill="x")
+        ctk.CTkOptionMenu(
+            body, variable=self.duplicate_var,
+            values=["Rename automatically", "Overwrite", "Ask me"],
+            fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
+        ).pack(fill="x", pady=(2, 10))
+
+        ctk.CTkCheckBox(
+            body, text="Keep original video when making MP3", variable=self.keep_original_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            body, text="Open folder when queue finishes", variable=self.open_folder_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            body, text="Remove completed items automatically", variable=self.remove_completed_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+
+        ctk.CTkLabel(body, text="Download Speed Limit", anchor="w").pack(fill="x", pady=(12, 0))
+        speed_row = ctk.CTkFrame(body, fg_color="transparent")
+        speed_row.pack(fill="x", pady=(2, 0))
+        speed_custom_entry = ctk.CTkEntry(speed_row, width=60, fg_color=COLOR_PANEL, textvariable=self.speed_limit_custom_var)
+
+        def update_speed_entry_state(_label=None):
+            speed_custom_entry.configure(state="normal" if self.speed_limit_var.get() == "Custom" else "disabled")
+
+        ctk.CTkOptionMenu(
+            speed_row, variable=self.speed_limit_var,
+            values=["Unlimited", "1 MB/s", "2 MB/s", "5 MB/s", "10 MB/s", "Custom"],
+            width=120, fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
+            command=update_speed_entry_state,
+        ).pack(side="left")
+        speed_custom_entry.pack(side="left", padx=(8, 4))
+        ctk.CTkLabel(speed_row, text="MB/s", anchor="w", text_color="gray60").pack(side="left")
+        update_speed_entry_state()
+
+        ctk.CTkLabel(body, text="Simultaneous Downloads", anchor="w").pack(fill="x", pady=(12, 0))
+        ctk.CTkOptionMenu(
+            body, variable=self.simultaneous_var, values=["1", "2", "3", "4"], width=90,
+            fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
+        ).pack(anchor="w", pady=(2, 0))
+
+        ctk.CTkLabel(body, text="Browser Cookies", anchor="w").pack(fill="x", pady=(12, 0))
+        ctk.CTkLabel(
+            body, text="For sites that need sign-in. Read directly from the browser by\nyt-dlp - never stored, displayed, or logged by this app.",
+            justify="left", anchor="w", font=ctk.CTkFont(size=11), text_color="gray60",
+        ).pack(fill="x", pady=(0, 2))
+        ctk.CTkOptionMenu(
+            body, variable=self.cookies_browser_var,
+            values=["None", "Chrome", "Edge", "Firefox", "Brave"],
+            width=140, fg_color=COLOR_ACCENT, button_color=COLOR_ACCENT_HOVER, button_hover_color=COLOR_ACCENT,
+        ).pack(anchor="w", pady=(2, 0))
+
+        ctk.CTkLabel(body, text="Notifications", anchor="w").pack(fill="x", pady=(12, 0))
+        ctk.CTkCheckBox(
+            body, text="Notify when a download completes", variable=self.notify_complete_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            body, text="Notify when a download fails", variable=self.notify_failure_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            body, text="Notify when the queue completes", variable=self.notify_queue_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(
+            body, text="Play a sound when the queue finishes", variable=self.play_sound_var,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+        ).pack(anchor="w", pady=2)
+
+        def do_cancel():
+            self.duplicate_var.set(snapshot["duplicate_var"])
+            self.keep_original_var.set(snapshot["keep_original_var"])
+            self.open_folder_var.set(snapshot["open_folder_var"])
+            self.remove_completed_var.set(snapshot["remove_completed_var"])
+            self.speed_limit_var.set(snapshot["speed_limit_var"])
+            self.speed_limit_custom_var.set(snapshot["speed_limit_custom_var"])
+            self.simultaneous_var.set(snapshot["simultaneous_var"])
+            self.notify_complete_var.set(snapshot["notify_complete_var"])
+            self.notify_failure_var.set(snapshot["notify_failure_var"])
+            self.notify_queue_var.set(snapshot["notify_queue_var"])
+            self.play_sound_var.set(snapshot["play_sound_var"])
+            self.cookies_browser_var.set(snapshot["cookies_browser_var"])
+            dialog.destroy()
+
+        def do_save():
+            self._save_settings(self.folder_entry.get().strip())
+            dialog.destroy()
+
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack(fill="x", padx=16, pady=(0, 14))
+        ctk.CTkButton(btn_row, text="Save", fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=do_save).pack(side="left")
+        ctk.CTkButton(btn_row, text="Cancel", fg_color="transparent", border_width=1, border_color=COLOR_ACCENT, hover_color=COLOR_PANEL, command=do_cancel).pack(side="left", padx=8)
+        dialog.protocol("WM_DELETE_WINDOW", do_cancel)
+
+    def _export_settings(self):
+        self._save_settings(self.folder_entry.get().strip())
+        path = filedialog.asksaveasfilename(
+            title="Export Settings", defaultextension=".json",
+            filetypes=[("JSON", "*.json")], initialfile="video-downloader-settings.json",
+        )
+        if not path:
+            return
+        try:
+            import json
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(self.cfg, handle, indent=2)
+            messagebox.showinfo("Export Settings", "Settings exported successfully.")
+        except OSError as exc:
+            messagebox.showerror("Export Settings", f"Could not write settings file: {exc}")
+
+    def _import_settings(self):
+        path = filedialog.askopenfilename(title="Import Settings", filetypes=[("JSON", "*.json")])
+        if not path:
+            return
+        try:
+            import json
+            with open(path, "r", encoding="utf-8") as handle:
+                imported = json.load(handle)
+            if not isinstance(imported, dict):
+                raise ValueError("Settings file is not in the expected format.")
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Import Settings", f"Could not read settings file: {exc}")
+            return
+        self.cfg.update(imported)
+        settings_module.save_settings(self.cfg)
+        self._apply_cfg_to_widgets()
+        messagebox.showinfo("Import Settings", "Settings imported. Restart isn't required - they're applied now.")
+
+    def _reset_settings_to_defaults(self):
+        if not messagebox.askyesno("Reset to Defaults", "Reset all settings to their default values?"):
+            return
+        # settings.py's DEFAULTS is the single source of truth - reuse it
+        # directly so this can never drift out of sync with it.
+        self.cfg = dict(settings_module.DEFAULTS)
+        settings_module.save_settings(self.cfg)
+        self._apply_cfg_to_widgets()
+        messagebox.showinfo("Reset to Defaults", "Settings have been reset.")
+
+    def _apply_cfg_to_widgets(self):
+        """Push self.cfg into every live variable/widget after an import or reset."""
+        self.folder_entry.delete(0, "end")
+        self.folder_entry.insert(0, self.cfg.get("output_folder", str(Path.home() / "Downloads")))
+        self.quality_var.set(self.cfg.get("quality", "best"))
+        self.quality_display_var.set(self.quality_labels.get(self.quality_var.get(), "Best Available"))
+        self.mute_var.set(not self.cfg.get("include_audio", True))
+        self.bitrate_var.set(self.cfg.get("audio_bitrate", "192"))
+        self.format_var.set(self.cfg.get("format_container", "best"))
+        self.format_display_var.set(self.format_labels.get(self.format_var.get(), "Best Available"))
+        self.subtitle_var.set(self.cfg.get("subtitle_mode", "none"))
+        self.subtitle_display_var.set(self.subtitle_labels.get(self.subtitle_var.get(), "None"))
+        self.embed_subs_var.set(self.cfg.get("embed_subs", False))
+        self.duplicate_var.set(self.cfg.get("duplicate_mode", "Rename automatically"))
+        self.keep_original_var.set(self.cfg.get("keep_original", False))
+        self.open_folder_var.set(self.cfg.get("open_folder_when_finished", True))
+        self.remove_completed_var.set(self.cfg.get("remove_completed", False))
+        self.speed_limit_var.set(self.cfg.get("speed_limit", "Unlimited"))
+        self.speed_limit_custom_var.set(str(self.cfg.get("speed_limit_custom_mbps", 5)))
+        self.simultaneous_var.set(str(self.cfg.get("simultaneous_downloads", 1)))
+        self.notify_complete_var.set(self.cfg.get("notify_on_complete", False))
+        self.notify_failure_var.set(self.cfg.get("notify_on_failure", True))
+        self.notify_queue_var.set(self.cfg.get("notify_on_queue_complete", True))
+        self.play_sound_var.set(self.cfg.get("play_sound_on_queue_complete", False))
+        self.cookies_browser_var.set(self.cfg.get("cookies_from_browser", "None"))
+        self._update_audio_option()
 
     # ------------------------------------------------------------------ #
     # Small UI helpers
@@ -509,16 +758,12 @@ class VideoDownloaderApp(_AppBase):
         self.subtitle_menu.configure(state="disabled" if is_audio_only else "normal")
         self.embed_subs_checkbox.configure(state="disabled" if is_audio_only else "normal")
 
-    def _update_speed_limit_entry(self):
-        is_custom = self.speed_limit_var.get() == "Custom"
-        self.speed_limit_custom_entry.configure(state="normal" if is_custom else "disabled")
-
     def _resolve_speed_limit_bytes(self) -> int | None:
         label = self.speed_limit_var.get()
         fixed_mbps = {"Unlimited": None, "1 MB/s": 1, "2 MB/s": 2, "5 MB/s": 5, "10 MB/s": 10}
         if label == "Custom":
             try:
-                mbps = float(self.speed_limit_custom_entry.get())
+                mbps = float(self.speed_limit_custom_var.get())
             except ValueError:
                 return None
         else:
@@ -545,7 +790,11 @@ class VideoDownloaderApp(_AppBase):
             messagebox.showerror("Invalid URL", "Paste a valid http:// or https:// video link first.")
             return
         self.preview_label.configure(text="Looking up video information...")
-        self.preview_loader.request(url, lambda info: self._show_preview(url, info), self._show_preview_error)
+        cookies_browser = self.cookies_browser_var.get()
+        self.preview_loader.request(
+            url, lambda info: self._show_preview(url, info), self._show_preview_error,
+            cookies_from_browser=cookies_browser.lower() if cookies_browser and cookies_browser != "None" else None,
+        )
 
     def _show_preview_error(self, exc: Exception):
         self.preview_label.configure(text=f"Preview unavailable: {exc}")
@@ -577,6 +826,18 @@ class VideoDownloaderApp(_AppBase):
     # ------------------------------------------------------------------ #
     # Adding to the queue (with duplicate-URL detection)
     # ------------------------------------------------------------------ #
+    def _make_download_item(self, url: str, output_folder: str, title: str) -> DownloadItem:
+        cookies_browser = self.cookies_browser_var.get()
+        return DownloadItem(
+            url=url, output_folder=output_folder, quality=self.quality_var.get(),
+            include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
+            duplicate_mode=self.duplicate_var.get(), audio_bitrate=self.bitrate_var.get(),
+            format_container=self.format_var.get(), subtitle_mode=self.subtitle_var.get(),
+            embed_subs=self.embed_subs_var.get(), speed_limit_bytes=self._resolve_speed_limit_bytes(),
+            title=title,
+            cookies_from_browser=cookies_browser.lower() if cookies_browser and cookies_browser != "None" else None,
+        )
+
     def _add_to_queue(self):
         url = self.url_entry.get().strip()
         if not downloader.is_valid_url(url):
@@ -599,38 +860,8 @@ class VideoDownloaderApp(_AppBase):
                 )
                 return
             playlist_title = self.preview_info.get("playlist_title", "this playlist")
-            add_all = messagebox.askyesno(
-                "Playlist Detected",
-                f"\"{playlist_title}\" has {len(entries)} videos.\n\n"
-                "Add all of them to the queue? Each video downloads and can be "
-                "paused/resumed separately.\n\n"
-                "Choose No to add only the single link you pasted instead.",
-            )
-            if add_all:
-                skipped = 0
-                for entry in entries:
-                    if self.queue_manager.find_duplicate(entry["url"]) is not None:
-                        skipped += 1
-                        continue
-                    self.queue_manager.add(DownloadItem(
-                        url=entry["url"], output_folder=output_folder, quality=self.quality_var.get(),
-                        include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
-                        duplicate_mode=self.duplicate_var.get(), audio_bitrate=self.bitrate_var.get(),
-                        format_container=self.format_var.get(), subtitle_mode=self.subtitle_var.get(),
-                        embed_subs=self.embed_subs_var.get(), speed_limit_bytes=self._resolve_speed_limit_bytes(),
-                        title=entry.get("title", "Video link"),
-                    ))
-                self._save_settings(output_folder)
-                self._refresh_queue()
-                self.queue_manager.persist()
-                added = len(entries) - skipped
-                message = f"Added {added} video(s) from the playlist to the queue."
-                if skipped:
-                    message += f" Skipped {skipped} already in the queue."
-                self.status_label.configure(text=message)
-                self._clear_url()
-                return
-            # Falls through to add just the pasted URL as a single item below.
+            self._open_playlist_dialog(entries, playlist_title, url, output_folder)
+            return
 
         duplicate = self.queue_manager.find_duplicate(url)
         if duplicate is not None:
@@ -643,19 +874,148 @@ class VideoDownloaderApp(_AppBase):
                 return
 
         title = self.preview_info.get("title", "Video link") if previewed and not self.preview_info.get("is_playlist") else "Video link"
-        self.queue_manager.add(DownloadItem(
-            url=url, output_folder=output_folder, quality=self.quality_var.get(),
-            include_audio=not self.mute_var.get(), keep_original=self.keep_original_var.get(),
-            duplicate_mode=self.duplicate_var.get(), audio_bitrate=self.bitrate_var.get(),
-            format_container=self.format_var.get(), subtitle_mode=self.subtitle_var.get(),
-            embed_subs=self.embed_subs_var.get(), speed_limit_bytes=self._resolve_speed_limit_bytes(),
-            title=title,
-        ))
+        self.queue_manager.add(self._make_download_item(url, output_folder, title))
         self._save_settings(output_folder)
         self._refresh_queue()
         self.queue_manager.persist()
         self.status_label.configure(text="Added to queue. You can add another link or start downloading.")
         self._clear_url()
+
+    # ------------------------------------------------------------------ #
+    # Playlist add dialog: Add All, pick individual videos with
+    # checkboxes, a range (e.g. 1,3,7,10-15), or just the pasted link.
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _parse_playlist_range(text: str, count: int) -> set[int] | None:
+        """Parses '1,3,7,10-15' into a zero-based index set, or None if invalid."""
+        indices: set[int] = set()
+        text = text.strip()
+        if not text:
+            return None
+        for chunk in text.split(","):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            if "-" in chunk:
+                start_str, _, end_str = chunk.partition("-")
+                try:
+                    start, end = int(start_str), int(end_str)
+                except ValueError:
+                    return None
+                if start < 1 or end < start:
+                    return None
+                indices.update(range(start - 1, min(end, count)))
+            else:
+                try:
+                    n = int(chunk)
+                except ValueError:
+                    return None
+                if n < 1:
+                    return None
+                if n - 1 < count:
+                    indices.add(n - 1)
+        return indices
+
+    def _open_playlist_dialog(self, entries: list, playlist_title: str, single_url: str, output_folder: str):
+        dialog = tk.Toplevel(self)
+        dialog.title("Playlist Detected")
+        dialog.configure(bg=COLOR_BG)
+        dialog.geometry("480x560")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        ctk.CTkLabel(
+            dialog, text=f"\"{playlist_title}\"", font=ctk.CTkFont(size=14, weight="bold"),
+            wraplength=440, justify="left", anchor="w",
+        ).pack(padx=16, pady=(16, 0), anchor="w")
+        ctk.CTkLabel(
+            dialog, text=f"{len(entries)} videos found. Choose which ones to add.",
+            text_color="gray60", anchor="w",
+        ).pack(padx=16, pady=(0, 8), anchor="w")
+
+        list_frame = ctk.CTkScrollableFrame(dialog, fg_color=COLOR_PANEL, height=280)
+        list_frame.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        check_vars: list[ctk.BooleanVar] = []
+        for entry in entries:
+            var = ctk.BooleanVar(value=True)
+            check_vars.append(var)
+            label = entry.get("title") or entry.get("url", "Video")
+            ctk.CTkCheckBox(
+                list_frame, text=label, variable=var, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+            ).pack(anchor="w", pady=2, padx=4)
+
+        quick_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        quick_row.pack(fill="x", padx=16)
+        ctk.CTkButton(
+            quick_row, text="Select All", width=90, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+            command=lambda: [v.set(True) for v in check_vars],
+        ).pack(side="left")
+        ctk.CTkButton(
+            quick_row, text="Select None", width=90, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+            command=lambda: [v.set(False) for v in check_vars],
+        ).pack(side="left", padx=6)
+
+        range_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        range_row.pack(fill="x", padx=16, pady=(8, 0))
+        ctk.CTkLabel(range_row, text="Range:", anchor="w").pack(side="left")
+        range_entry = ctk.CTkEntry(range_row, placeholder_text="e.g. 1,3,7,10-15", fg_color=COLOR_PANEL)
+        range_entry.pack(side="left", fill="x", expand=True, padx=(6, 6))
+
+        def apply_range():
+            parsed = self._parse_playlist_range(range_entry.get(), len(entries))
+            if parsed is None:
+                messagebox.showerror("Invalid Range", "Use a format like 1,3,7,10-15.")
+                return
+            for i, var in enumerate(check_vars):
+                var.set(i in parsed)
+
+        ctk.CTkButton(range_row, text="Apply", width=70, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=apply_range).pack(side="left")
+
+        def add_checked():
+            selected = [entry for entry, var in zip(entries, check_vars) if var.get()]
+            if not selected:
+                messagebox.showwarning("Nothing Selected", "Check at least one video first.")
+                return
+            skipped = 0
+            for entry in selected:
+                if self.queue_manager.find_duplicate(entry["url"]) is not None:
+                    skipped += 1
+                    continue
+                self.queue_manager.add(self._make_download_item(
+                    entry["url"], output_folder, entry.get("title", "Video link"),
+                ))
+            self._save_settings(output_folder)
+            self._refresh_queue()
+            self.queue_manager.persist()
+            added = len(selected) - skipped
+            message = f"Added {added} video(s) from the playlist to the queue."
+            if skipped:
+                message += f" Skipped {skipped} already in the queue."
+            self.status_label.configure(text=message)
+            self._clear_url()
+            dialog.destroy()
+
+        def add_single_link_only():
+            dialog.destroy()
+            duplicate = self.queue_manager.find_duplicate(single_url)
+            if duplicate is not None and not messagebox.askyesno(
+                "Already in queue",
+                f"\"{duplicate.title}\" (or a version of this link with different "
+                "tracking parameters) is already in the queue.\n\nAdd it again anyway?",
+            ):
+                return
+            self.queue_manager.add(self._make_download_item(single_url, output_folder, "Video link"))
+            self._save_settings(output_folder)
+            self._refresh_queue()
+            self.queue_manager.persist()
+            self.status_label.configure(text="Added the single link to the queue (not the whole playlist).")
+            self._clear_url()
+
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack(fill="x", padx=16, pady=(10, 14))
+        ctk.CTkButton(btn_row, text="Add Selected", fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, command=add_checked).pack(side="left")
+        ctk.CTkButton(btn_row, text="Just This Link", fg_color="transparent", border_width=1, border_color=COLOR_ACCENT, hover_color=COLOR_PANEL, command=add_single_link_only).pack(side="left", padx=8)
+        ctk.CTkButton(btn_row, text="Cancel", fg_color="transparent", border_width=1, border_color=COLOR_ACCENT, hover_color=COLOR_PANEL, command=dialog.destroy).pack(side="right")
 
     def _save_settings(self, output_folder: str):
         self.cfg.update({
@@ -665,12 +1025,13 @@ class VideoDownloaderApp(_AppBase):
             "remove_completed": self.remove_completed_var.get(), "audio_bitrate": self.bitrate_var.get(),
             "format_container": self.format_var.get(), "subtitle_mode": self.subtitle_var.get(),
             "embed_subs": self.embed_subs_var.get(), "speed_limit": self.speed_limit_var.get(),
-            "speed_limit_custom_mbps": self.speed_limit_custom_entry.get(),
+            "speed_limit_custom_mbps": self.speed_limit_custom_var.get(),
             "simultaneous_downloads": self.simultaneous_var.get(),
             "notify_on_complete": self.notify_complete_var.get(),
             "notify_on_failure": self.notify_failure_var.get(),
             "notify_on_queue_complete": self.notify_queue_var.get(),
             "play_sound_on_queue_complete": self.play_sound_var.get(),
+            "cookies_from_browser": self.cookies_browser_var.get(),
         })
         settings_module.save_settings(self.cfg)
 
@@ -754,6 +1115,40 @@ class VideoDownloaderApp(_AppBase):
 
     def _move_down(self):
         self._move_selected(1)
+
+    def _show_queue_context_menu(self, event):
+        # Right-click selects the item under the cursor first, so the menu
+        # always acts on what the user actually clicked rather than
+        # whatever was selected before.
+        index = self.queue_listbox.nearest(event.y)
+        if index < 0 or index >= len(self.queue_manager.items):
+            return
+        self.queue_listbox.selection_clear(0, tk.END)
+        self.queue_listbox.selection_set(index)
+        item = self.queue_manager.items[index]
+
+        menu = tk.Menu(self, tearoff=False)
+        if item.status == Status.DOWNLOADING:
+            menu.add_command(label="Pause", command=self._pause_selected)
+        elif item.status in (Status.PAUSED, Status.QUEUED):
+            menu.add_command(label="Start / Resume", command=self._start_queue)
+        if item.status == Status.FAILED:
+            menu.add_command(label="Retry", command=self._retry_selected_failed)
+        menu.add_command(label="\u2191 Move Up", command=self._move_up)
+        menu.add_command(label="\u2193 Move Down", command=self._move_down)
+        menu.add_separator()
+        menu.add_command(label="Open File", command=self._open_selected_file)
+        menu.add_command(label="Open Folder", command=self._open_selected_folder)
+        menu.add_separator()
+        menu.add_command(label="Remove", command=self._remove_selected)
+        menu.add_separator()
+        menu.add_command(label="Retry All Failed", command=self._retry_all_failed)
+        menu.add_command(label="Clear Completed", command=self._clear_completed)
+        menu.add_command(label="Clear Failed", command=self._clear_failed)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     # ------------------------------------------------------------------ #
     # Queue processing: delegated to DownloadManager. This layer only

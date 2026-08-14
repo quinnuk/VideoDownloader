@@ -58,4 +58,8 @@ class DownloadItem:
     filepath: str | None = None
     error: str | None = None
     error_detail: str | None = None
+    # Browser to read sign-in cookies from (e.g. "chrome", "firefox"), or
+    # None to download without cookies. Passed straight through to yt-dlp's
+    # cookiesfrombrowser option; never stored, displayed, or logged.
+    cookies_from_browser: str | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex)

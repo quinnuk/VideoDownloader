@@ -111,6 +111,7 @@ class DownloadManager:
                     duplicate_callback=callbacks.ask_duplicate_action, audio_bitrate=item.audio_bitrate,
                     format_container=item.format_container, subtitle_mode=item.subtitle_mode,
                     embed_subs=item.embed_subs, speed_limit_bytes=item.speed_limit_bytes,
+                    cookies_from_browser=item.cookies_from_browser,
                     progress_callback=lambda info, queued_item=item: self.root.after(
                         0, callbacks.on_progress, queued_item, info
                     ),

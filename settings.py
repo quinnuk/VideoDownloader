@@ -14,6 +14,9 @@ APP_NAME = "VideoDownloader"
 DEFAULTS = {
     "output_folder": str(Path.home() / "Videos" / "Downloads"),
     "quality": "best",  # "best" | "2160p" | "1440p" | "1080p" | "720p" | "480p" | "360p" | "audio_only"
+    "include_audio": True,
+    "keep_original": False,
+    "duplicate_mode": "Rename automatically",  # "Rename automatically" | "Overwrite" | "Ask me"
     "audio_bitrate": "192",  # "128" | "192" | "256" | "320"
     "format_container": "best",  # "best" | "mp4" | "mkv" | "webm"
     "subtitle_mode": "none",  # "none" | "english" | "all"
@@ -21,12 +24,17 @@ DEFAULTS = {
     "speed_limit": "Unlimited",  # "Unlimited" | "1 MB/s" | "2 MB/s" | "5 MB/s" | "10 MB/s" | "Custom"
     "speed_limit_custom_mbps": 5,
     "simultaneous_downloads": 1,  # 1-4
+    "remove_completed": False,
     "notify_on_complete": False,
     "notify_on_failure": True,
     "notify_on_queue_complete": True,
     "play_sound_on_queue_complete": False,
     "delete_temp_on_error": True,
     "open_folder_when_finished": True,
+    # Browser to read sign-in cookies from ("chrome", "edge", "firefox",
+    # "brave", ...), or "None" for no cookies. Read directly by yt-dlp;
+    # never stored, displayed, or logged beyond this setting itself.
+    "cookies_from_browser": "None",
 }
 
 
