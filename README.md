@@ -52,6 +52,7 @@ Before downloading, preview:
 ### 🎵 Audio & Format Options
 
 - Extract audio as MP3, with your choice of bitrate (128 / 192 / 256 / 320 kbps)
+- Download video without sound (mute video) when you don't need the audio track
 - Quality options from Best Available down to 360p, or Audio Only
 - Choose a container (Best Available / MP4 / MKV / WEBM) — remuxes instead of re-encoding wherever possible
 - Optional subtitles (None / English / All Available), embedded or as a separate file
