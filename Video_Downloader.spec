@@ -1,16 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import shutil
 from PyInstaller.utils.hooks import collect_all
 
-# Locally this falls back to Steve's current WinGet FFmpeg path. In CI (or
-# after a local FFmpeg update changes the version folder), set FFMPEG_PATH
-# in the environment instead of editing this file.
-FFMPEG_PATH = os.environ.get(
-    "FFMPEG_PATH",
-    "C:/Users/steve/AppData/Local/Microsoft/WinGet/Packages/"
-    "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/"
-    "ffmpeg-8.1.2-full_build/bin/ffmpeg.exe",
-)
+# FFmpeg to bundle into the .exe. Set FFMPEG_PATH in the environment to
+# pin an exact copy (recommended for CI); otherwise this falls back to
+# whatever "ffmpeg" resolves to on the current machine's PATH, so the
+# build doesn't depend on any one developer's local install location.
+FFMPEG_PATH = os.environ.get("FFMPEG_PATH") or shutil.which("ffmpeg")
+if not FFMPEG_PATH:
+    raise SystemExit(
+        "Could not find FFmpeg. Install it and make sure 'ffmpeg' is on "
+        "PATH, or set the FFMPEG_PATH environment variable to its exe."
+    )
 
 datas = []
 binaries = [(FFMPEG_PATH, '.')]

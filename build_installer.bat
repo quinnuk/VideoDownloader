@@ -3,21 +3,26 @@ setlocal
 cd /d "%~dp0"
 set "PYTHON=python"
 
-echo Installing the packaging tool if needed...
-%PYTHON% -m pip install --upgrade pyinstaller
+echo Installing build requirements if needed...
+%PYTHON% -m pip install -r requirements-build.txt
 if errorlevel 1 goto :error
 
 echo Looking for FFmpeg to include with the app...
-set "FFMPEG="
-for /f "delims=" %%F in ('where ffmpeg 2^>nul') do if not defined FFMPEG set "FFMPEG=%%F"
-
-echo Building Video Downloader...
-if defined FFMPEG (
-    %PYTHON% -m PyInstaller --noconfirm --clean --windowed --onefile --name "Video Downloader" --icon "video_downloader_icon.ico" --collect-all customtkinter --collect-all yt_dlp --add-binary "%FFMPEG%;." main.py
-) else (
-    echo FFmpeg was not found. The app will build, but MP3 conversion and some video downloads will require FFmpeg on the other PC.
-    %PYTHON% -m PyInstaller --noconfirm --clean --windowed --onefile --name "Video Downloader" --icon "video_downloader_icon.ico" --collect-all customtkinter --collect-all yt_dlp main.py
+if not defined FFMPEG_PATH (
+    for /f "delims=" %%F in ('where ffmpeg 2^>nul') do if not defined FFMPEG_PATH set "FFMPEG_PATH=%%F"
 )
+if defined FFMPEG_PATH (
+    echo Using FFmpeg at: %FFMPEG_PATH%
+) else (
+    echo FFmpeg was not found on PATH; Video_Downloader.spec will fall back to its
+    echo built-in default path. Set FFMPEG_PATH first if that fallback is wrong
+    echo on this machine.
+)
+
+echo Building Video Downloader (via Video_Downloader.spec)...
+REM Built from the same .spec file as build_exe.bat, so both scripts bundle
+REM FFmpeg and package options identically instead of drifting apart.
+%PYTHON% -m PyInstaller --noconfirm --clean "Video_Downloader.spec"
 if errorlevel 1 goto :error
 
 set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"

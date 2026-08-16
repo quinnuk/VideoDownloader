@@ -45,7 +45,7 @@ if not errorlevel 1 (
 if not defined PYI_CMD (
     echo ERROR: PyInstaller isn't reachable via "pyinstaller", "python -m PyInstaller",
     echo or "py -m PyInstaller".
-    echo Install project requirements first:  pip install -r requirements.txt
+    echo Install build requirements first:  pip install -r requirements-build.txt
     echo If it's already installed, this usually means Python's Scripts folder
     echo isn't on PATH - try running:  python -m PyInstaller --version
     echo to confirm which command works on this machine.
@@ -54,20 +54,27 @@ if not defined PYI_CMD (
 echo Using: %PYI_CMD%
 echo.
 
-set "FFMPEG_CHECK=C:\Users\steve\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe"
-if not exist "%FFMPEG_CHECK%" (
-    echo WARNING: ffmpeg.exe not found at the path baked into Video_Downloader.spec:
-    echo   %FFMPEG_CHECK%
-    echo.
-    echo If WinGet updated FFmpeg since the spec was written ^(the version number
-    echo in that path, 8.1.2, changes with each FFmpeg update^), this build will
-    echo either fail or silently ship without FFmpeg bundled. Run:
-    echo   where ffmpeg
-    echo and update the "binaries" line near the top of Video_Downloader.spec to
-    echo match the current path, then re-run this script.
-    echo.
-    set /p CONTINUE_ANYWAY="Continue the build anyway? (y/N): "
-    if /i not "!CONTINUE_ANYWAY!"=="y" goto :fail
+REM Video_Downloader.spec resolves FFmpeg itself (FFMPEG_PATH env var, else
+REM whatever "ffmpeg" is on PATH) and aborts with a clear error if neither
+REM is found - so this is just an earlier, friendlier heads-up.
+if defined FFMPEG_PATH (
+    if not exist "%FFMPEG_PATH%" (
+        echo WARNING: FFMPEG_PATH is set to a file that doesn't exist:
+        echo   %FFMPEG_PATH%
+        echo.
+        set /p CONTINUE_ANYWAY="Continue the build anyway? (y/N): "
+        if /i not "!CONTINUE_ANYWAY!"=="y" goto :fail
+    )
+) else (
+    where ffmpeg >nul 2>nul
+    if errorlevel 1 (
+        echo WARNING: No FFMPEG_PATH set and ffmpeg isn't on PATH.
+        echo Video_Downloader.spec will fail the build unless one of those is
+        echo available. Install FFmpeg, add it to PATH, or set FFMPEG_PATH.
+        echo.
+        set /p CONTINUE_ANYWAY="Continue anyway? (y/N): "
+        if /i not "!CONTINUE_ANYWAY!"=="y" goto :fail
+    )
 )
 
 REM --- Clean previous build artifacts -----------------------------------

@@ -14,7 +14,6 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-import urllib.request
 from pathlib import Path
 
 from tkinter import filedialog, messagebox
@@ -109,7 +108,7 @@ class VideoDownloaderApp(_AppBase):
             pady=(16, 2)
         )
         ctk.CTkLabel(
-            self, text="Paste links, preview them, then download them one at a time.",
+            self, text="Paste links, preview them, then queue them up to download.",
             font=ctk.CTkFont(size=11), text_color="gray60",
         ).pack(pady=(0, 12))
 
@@ -462,7 +461,7 @@ class VideoDownloaderApp(_AppBase):
             if latest is None:
                 status_label.configure(text=f"Currently running yt-dlp {current}.\nCould not reach PyPI to check for a newer version.")
                 return
-            if current == latest:
+            if ytdlp_updater.versions_equal(current, latest):
                 status_label.configure(text=f"You're on the latest version of yt-dlp ({current}).")
                 return
             status_label.configure(text=f"Update available: {current} \u2192 {latest}.")
@@ -506,8 +505,7 @@ class VideoDownloaderApp(_AppBase):
 
         def do_check():
             try:
-                import yt_dlp
-                current = yt_dlp.version.__version__
+                current = downloader.get_installed_version()
             except Exception:  # noqa: BLE001
                 current = "unknown"
             result = ytdlp_updater.get_latest_version_and_wheel_url()
@@ -657,7 +655,6 @@ class VideoDownloaderApp(_AppBase):
         if not path:
             return
         try:
-            import json
             with open(path, "w", encoding="utf-8") as handle:
                 json.dump(self.cfg, handle, indent=2)
             messagebox.showinfo("Export Settings", "Settings exported successfully.")
@@ -669,7 +666,6 @@ class VideoDownloaderApp(_AppBase):
         if not path:
             return
         try:
-            import json
             with open(path, "r", encoding="utf-8") as handle:
                 imported = json.load(handle)
             if not isinstance(imported, dict):
@@ -826,6 +822,19 @@ class VideoDownloaderApp(_AppBase):
     # ------------------------------------------------------------------ #
     # Adding to the queue (with duplicate-URL detection)
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _confirm_add_duplicate(duplicate: DownloadItem) -> bool:
+        """Ask the user to confirm adding a link that already matches
+        something in the queue (ignoring tracking-parameter differences).
+        Shared by the single-link and playlist-single-link add paths so
+        the wording can't drift between them.
+        """
+        return messagebox.askyesno(
+            "Already in queue",
+            f"\"{duplicate.title}\" (or a version of this link with different "
+            "tracking parameters) is already in the queue.\n\nAdd it again anyway?",
+        )
+
     def _make_download_item(self, url: str, output_folder: str, title: str) -> DownloadItem:
         cookies_browser = self.cookies_browser_var.get()
         return DownloadItem(
@@ -864,14 +873,8 @@ class VideoDownloaderApp(_AppBase):
             return
 
         duplicate = self.queue_manager.find_duplicate(url)
-        if duplicate is not None:
-            proceed = messagebox.askyesno(
-                "Already in queue",
-                f"\"{duplicate.title}\" (or a version of this link with different "
-                "tracking parameters) is already in the queue.\n\nAdd it again anyway?",
-            )
-            if not proceed:
-                return
+        if duplicate is not None and not self._confirm_add_duplicate(duplicate):
+            return
 
         title = self.preview_info.get("title", "Video link") if previewed and not self.preview_info.get("is_playlist") else "Video link"
         self.queue_manager.add(self._make_download_item(url, output_folder, title))
@@ -998,11 +1001,7 @@ class VideoDownloaderApp(_AppBase):
         def add_single_link_only():
             dialog.destroy()
             duplicate = self.queue_manager.find_duplicate(single_url)
-            if duplicate is not None and not messagebox.askyesno(
-                "Already in queue",
-                f"\"{duplicate.title}\" (or a version of this link with different "
-                "tracking parameters) is already in the queue.\n\nAdd it again anyway?",
-            ):
+            if duplicate is not None and not self._confirm_add_duplicate(duplicate):
                 return
             self.queue_manager.add(self._make_download_item(single_url, output_folder, "Video link"))
             self._save_settings(output_folder)

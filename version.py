@@ -6,4 +6,4 @@ consistent across the About window, installer, and README instead of
 drifting out of sync.
 """
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.1"

@@ -93,6 +93,14 @@ def is_valid_url(url: str) -> bool:
     return bool(url) and bool(URL_RE.match(url.strip()))
 
 
+def get_installed_version() -> str:
+    """The currently-active yt-dlp version, for the About dialog / update
+    checker. Reads it from the yt_dlp package itself so it always
+    reflects whichever build is actually active (including a pending
+    override applied by ytdlp_updater.activate_pending_override())."""
+    return yt_dlp.version.__version__
+
+
 def normalize_url(url: str) -> str:
     """Canonical form of a URL for duplicate detection: strips tracking
     query parameters, a leading "www.", and any trailing slash, and sorts
@@ -140,7 +148,7 @@ def classify_error(exc: Exception) -> tuple[str, str]:
     return reason, detail
 
 
-def get_video_info(url: str, cookies_from_browser: str | None = None) -> dict:
+def get_video_info(url: str, cookies_from_browser: str = "none") -> dict:
     """Return lightweight information for the preview panel without downloading.
 
     If the URL points at a playlist, returns {"is_playlist": True, "playlist_title": ...,
@@ -148,9 +156,8 @@ def get_video_info(url: str, cookies_from_browser: str | None = None) -> dict:
     fast even for large playlists since it doesn't fetch full metadata per video.
     Otherwise returns the usual single-video info shape with "is_playlist": False.
 
-    cookies_from_browser: browser name ("chrome", "edge", "firefox", "brave", ...)
-    to read sign-in cookies from, or None to probe without cookies. Read directly
-    by yt-dlp; never stored, displayed, or logged by this app.
+    cookies_from_browser lets private/login-required videos be previewed using an
+    existing browser session ("chrome", "edge", "firefox", "brave") - "none" skips this.
     """
     probe_options = {
         "noplaylist": False,
@@ -158,7 +165,7 @@ def get_video_info(url: str, cookies_from_browser: str | None = None) -> dict:
         "no_warnings": True,
         "extract_flat": "in_playlist",
     }
-    if cookies_from_browser:
+    if cookies_from_browser and cookies_from_browser != "none":
         probe_options["cookiesfrombrowser"] = (cookies_from_browser,)
     with yt_dlp.YoutubeDL(probe_options) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -211,7 +218,7 @@ def download_video(
     speed_limit_bytes: Optional[int] = None,
     retry_attempts: int = 3,
     retry_delay: int = 5,
-    cookies_from_browser: Optional[str] = None,
+    cookies_from_browser: str = "none",
 ) -> DownloadResult:
     """Download one item, optionally without sound, and report its progress.
 
@@ -221,10 +228,6 @@ def download_video(
     `control.request_cancel()` was called instead, the hook raises
     DownloadCancelled; the caller is expected to remove the partial file
     since the download has been abandoned rather than paused.
-
-    cookies_from_browser: browser name ("chrome", "edge", "firefox", "brave", ...)
-    to read sign-in cookies from for this download, or None to download without
-    cookies. Read directly by yt-dlp; never stored, displayed, or logged by this app.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     is_audio = quality == "audio_only"
@@ -261,7 +264,7 @@ def download_video(
     output_template = str(Path(output_dir) / "%(title)s.%(ext)s")
     if duplicate_mode == "Ask me":
         probe_options = {"outtmpl": output_template, "noplaylist": True, "quiet": True, "no_warnings": True}
-        if cookies_from_browser:
+        if cookies_from_browser and cookies_from_browser != "none":
             probe_options["cookiesfrombrowser"] = (cookies_from_browser,)
         with yt_dlp.YoutubeDL(probe_options) as probe:
             probe_info = probe.extract_info(url, download=False)
@@ -300,10 +303,20 @@ def download_video(
             "http": lambda n, _d=retry_delay: _d,
             "fragment": lambda n, _d=retry_delay: _d,
         },
+        # Fetch in bounded-size HTTP range requests rather than one long-lived
+        # connection. Large/high-bitrate streams (4K HDR in particular) are
+        # the most likely to have the CDN drop a single continuous connection
+        # mid-stream, which surfaces as "X bytes read, Y more expected" -
+        # chunking means a dropped connection only costs one chunk, which
+        # then retries cleanly via fragment_retries above.
+        "http_chunk_size": 10 * 1024 * 1024,  # 10 MB
     }
     if speed_limit_bytes:
         ydl_opts["ratelimit"] = speed_limit_bytes
-    if cookies_from_browser:
+    if cookies_from_browser and cookies_from_browser != "none":
+        # Reads cookies directly from the named browser's local profile via
+        # yt-dlp - we never read, display, log, or transmit the cookie data
+        # ourselves; only the browser name is ever stored or logged.
         ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
     if duplicate_mode == "Rename automatically":
         ydl_opts["outtmpl"] = str(Path(output_dir) / "%(title)s [%(id)s].%(ext)s")

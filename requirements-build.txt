@@ -1,0 +1,4 @@
+# Extra tooling needed only to package the app into an .exe/installer
+# (see build_exe.bat / build_installer.bat). Not needed to run from source.
+-r requirements.txt
+pyinstaller>=6.10.0

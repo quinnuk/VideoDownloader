@@ -112,3 +112,21 @@ def installed_override_version() -> str | None:
         return namespace.get("__version__")
     except Exception:  # noqa: BLE001
         return None
+
+
+def versions_equal(current: str, latest: str) -> bool:
+    """
+    Compare two yt-dlp version strings while ignoring zero-padding
+    differences, e.g. '2026.07.04' (yt_dlp.version.__version__, which keeps
+    the zero-padded date format) vs '2026.7.4' (PyPI's "info.version",
+    which is normalized per PEP 440 and drops leading zeros from each
+    segment). These represent the same release - a naive `==` comparison
+    would report an update as available forever, even right after
+    installing the latest version.
+    """
+    try:
+        return [int(part) for part in current.split(".")] == [int(part) for part in latest.split(".")]
+    except ValueError:
+        # Non-numeric segment (shouldn't normally happen for yt-dlp's
+        # date-based versions) - fall back to a plain string comparison.
+        return current == latest

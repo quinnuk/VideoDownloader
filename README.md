@@ -4,7 +4,7 @@ A modern Windows video downloader with a simple, user-friendly interface powered
 
 Download videos and audio from your favourite websites with support for thousands of online platforms.
 
-[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Version](https://img.shields.io/badge/version-1.3.0-orange)](CHANGELOG.md)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://img.shields.io/badge/platform-Windows-blue) [![Python](https://img.shields.io/badge/python-3.x-yellow)](https://img.shields.io/badge/python-3.x-yellow) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Version](https://img.shields.io/badge/version-1.3.1-orange)](CHANGELOG.md)
 
 <p align="center">
   <a href="https://buymeacoffee.com/quinnuk" target="_blank">

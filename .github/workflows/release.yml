@@ -27,7 +27,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-build.txt
 
       - name: Download FFmpeg
         shell: pwsh
@@ -39,8 +39,9 @@ jobs:
 
       # Video_Downloader.spec (underscore) is the one with FFmpeg bundling
       # set up correctly - same file build_exe.bat uses locally. It reads
-      # the FFMPEG_PATH env var we just set, falling back to Steve's local
-      # WinGet path only when that variable is unset.
+      # the FFMPEG_PATH env var we just set; if that were ever unset, it
+      # falls back to whatever "ffmpeg" resolves to on PATH, and fails the
+      # build with a clear error if neither is available.
       - name: Build executable with PyInstaller
         run: pyinstaller --noconfirm "Video_Downloader.spec"
 
